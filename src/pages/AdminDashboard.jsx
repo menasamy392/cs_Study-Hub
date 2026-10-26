@@ -584,6 +584,27 @@ export default function AdminDashboard() {
 
       {/* Main Admin Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Warning banner when Supabase cloud database is not connected */}
+        {!isConfigured && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-950/30 border border-amber-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-amber-200 text-xs">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-white text-sm">Supabase Cloud Database Not Connected</p>
+                <p className="text-amber-300/80 mt-0.5">
+                  Your changes currently only save in this specific browser. To synchronize lectures, quizzes, and subjects so that all students and devices see your updates, connect your Supabase database in Vercel.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('supabase_setup')}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shrink-0 transition-colors shadow-md"
+            >
+              Connect Cloud Database →
+            </button>
+          </div>
+        )}
+
         {/* Navigation Tabs */}
         <div className="flex items-center gap-2 border-b border-slate-800 pb-4 overflow-x-auto no-scrollbar">
           <button
@@ -1131,30 +1152,78 @@ export default function AdminDashboard() {
         {/* TAB 4: SUPABASE SETUP */}
         {activeTab === 'supabase_setup' && (
           <div className="max-w-4xl space-y-6 bg-[#0B1120] p-6 sm:p-8 rounded-3xl border border-slate-800">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Database className="w-5 h-5 text-blue-500" />
-              Supabase Backend Setup
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-400">
-              Study Hub connects to Supabase PostgreSQL, Authentication, and Storage bucket for cloud persistence.
-            </p>
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Database className="w-5 h-5 text-blue-500" />
+                Supabase Cloud Database Synchronization
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                Connect Supabase so that all subjects, lectures, quizzes, and warnings are stored in the cloud and instantly synchronized across all student browsers and devices.
+              </p>
+            </div>
 
             <div className="p-4 rounded-2xl bg-[#0F172A] border border-slate-800 flex items-center justify-between">
               <div>
-                <p className="text-sm font-bold text-white">Connection Status</p>
+                <p className="text-sm font-bold text-white">Cloud Connection Status</p>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  {isConfigured ? 'Supabase cloud database is connected!' : 'Running in local mock mode. All changes persist in localStorage.'}
+                  {isConfigured
+                    ? 'Connected to Supabase PostgreSQL & Realtime broadcasting active.'
+                    : 'Not Connected — running in browser-only mode. Updates are not visible to other devices until connected.'}
                 </p>
               </div>
               <span className={`text-xs font-bold px-3 py-1 rounded-full ${isConfigured ? 'bg-emerald-900/60 text-emerald-300' : 'bg-amber-900/60 text-amber-300'}`}>
-                {isConfigured ? 'Connected' : 'Demo Mode'}
+                {isConfigured ? 'Cloud Connected' : 'Local Demo Mode'}
               </span>
+            </div>
+
+            {/* Step-by-Step Instructions */}
+            <div className="space-y-4 pt-2 border-t border-slate-800">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider text-slate-300">
+                How to Connect Supabase (3 Quick Steps)
+              </h3>
+
+              <div className="space-y-3 text-xs text-slate-300">
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                  <p className="font-bold text-blue-400 mb-1">Step 1: Get Supabase Credentials</p>
+                  <p className="text-slate-400">
+                    Open your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">Supabase Dashboard</a> $\rightarrow$ Project Settings $\rightarrow$ <strong>API</strong>. Copy your <strong>Project URL</strong>, <strong>anon public key</strong>, and <strong>service_role secret key</strong>.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                  <p className="font-bold text-blue-400 mb-1">Step 2: Add Environment Variables in Vercel</p>
+                  <p className="text-slate-400 mb-2">
+                    Open <a href="https://vercel.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">Vercel Dashboard</a> $\rightarrow$ your Project $\rightarrow$ <strong>Settings</strong> $\rightarrow$ <strong>Environment Variables</strong>:
+                  </p>
+                  <ul className="space-y-1 font-mono text-[11px] text-slate-200">
+                    <li className="bg-slate-950 px-2.5 py-1.5 rounded border border-slate-800/80 flex items-center justify-between">
+                      <span>VITE_SUPABASE_URL</span>
+                      <span className="text-slate-500 font-sans text-xs">Project URL</span>
+                    </li>
+                    <li className="bg-slate-950 px-2.5 py-1.5 rounded border border-slate-800/80 flex items-center justify-between">
+                      <span>VITE_SUPABASE_ANON_KEY</span>
+                      <span className="text-slate-500 font-sans text-xs">anon public key</span>
+                    </li>
+                    <li className="bg-slate-950 px-2.5 py-1.5 rounded border border-slate-800/80 flex items-center justify-between">
+                      <span>SUPABASE_SERVICE_ROLE_KEY</span>
+                      <span className="text-slate-500 font-sans text-xs">service_role secret key</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                  <p className="font-bold text-blue-400 mb-1">Step 3: Run Database Schema in SQL Editor</p>
+                  <p className="text-slate-400">
+                    In Supabase, open <strong>SQL Editor</strong>, paste the content of <code className="text-blue-300">supabase/schema.sql</code> from this repository, and click <strong>Run</strong>. This creates all tables, foreign keys with cascade deletion, storage buckets, and realtime triggers.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
               <div>
-                <p className="text-sm font-bold text-white">Reset Demo Data</p>
-                <p className="text-xs text-slate-500">Restores all sample subjects, lectures, and announcements.</p>
+                <p className="text-sm font-bold text-white">Reset Local Mock Data</p>
+                <p className="text-xs text-slate-500">Restores default sample subjects and lectures in local browser storage.</p>
               </div>
               <button
                 onClick={() => {
@@ -1163,7 +1232,7 @@ export default function AdminDashboard() {
                 }}
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center gap-2"
               >
-                <RotateCcw className="w-3.5 h-3.5" /> Reset Defaults
+                <RotateCcw className="w-3.5 h-3.5" /> Reset Local Defaults
               </button>
             </div>
           </div>

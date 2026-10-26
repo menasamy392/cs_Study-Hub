@@ -24,7 +24,7 @@ export function DataProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load progress and last studied from localStorage
+  // Load progress and last studied from localStorage (student-specific device state)
   useEffect(() => {
     try {
       const storedProgress = localStorage.getItem(STORAGE_KEYS.PROGRESS);
@@ -41,14 +41,14 @@ export function DataProvider({ children }) {
     }
   }, []);
 
-  // Load Data from Supabase or Fallback to LocalStorage
+  // Load Data from Supabase Cloud or Fallback to LocalStorage
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        // Fetch subjects from Supabase
+        // 1. Fetch subjects from Supabase
         const { data: subData, error: subError } = await supabase
           .from('subjects')
           .select('*')
@@ -57,7 +57,7 @@ export function DataProvider({ children }) {
 
         if (subError) throw subError;
 
-        // Fetch materials from Supabase
+        // 2. Fetch materials from Supabase
         const { data: matData, error: matError } = await supabase
           .from('materials')
           .select('*')
@@ -66,7 +66,7 @@ export function DataProvider({ children }) {
 
         if (matError) throw matError;
 
-        // Fetch announcements from Supabase
+        // 3. Fetch announcements from Supabase
         let annData = [];
         try {
           const { data: fetchedAnn, error: annError } = await supabase
@@ -76,12 +76,11 @@ export function DataProvider({ children }) {
           if (!annError && fetchedAnn) {
             annData = fetchedAnn;
           }
-        } catch {
-          const storedAnn = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
-          annData = storedAnn ? JSON.parse(storedAnn) : [];
+        } catch (annErr) {
+          console.warn('Note on announcements query:', annErr);
         }
 
-        // Fetch academic warning PDFs from Supabase
+        // 4. Fetch academic warning PDFs from Supabase
         let warnData = [];
         try {
           const { data: fetchedWarn, error: warnError } = await supabase
@@ -91,9 +90,8 @@ export function DataProvider({ children }) {
           if (!warnError && fetchedWarn) {
             warnData = fetchedWarn;
           }
-        } catch {
-          const storedWarn = localStorage.getItem(STORAGE_KEYS.WARNINGS);
-          warnData = storedWarn ? JSON.parse(storedWarn) : [];
+        } catch (warnErr) {
+          console.warn('Note on warnings query:', warnErr);
         }
 
         setSubjects(subData || []);
@@ -101,17 +99,15 @@ export function DataProvider({ children }) {
         setAnnouncements(annData || []);
         setWarnings(warnData || []);
 
-        // Sync fresh database state to local cache for offline/instant initial renders
+        // Cache fresh cloud data in local storage for instant initial paint
         try {
           localStorage.setItem(STORAGE_KEYS.SUBJECTS, JSON.stringify(subData || []));
           localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(matData || []));
           localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(annData || []));
           localStorage.setItem(STORAGE_KEYS.WARNINGS, JSON.stringify(warnData || []));
-        } catch (e) {
-          console.warn('Failed to cache Supabase records in localStorage', e);
-        }
+        } catch {}
       } catch (err) {
-        console.error('Error fetching Supabase data, falling back to local storage:', err);
+        console.error('Error fetching Supabase data, falling back to local cache:', err);
         setError(err.message || 'Failed to load data from Supabase');
         loadLocalData();
       } finally {
@@ -123,10 +119,9 @@ export function DataProvider({ children }) {
     }
   }, []);
 
-  // Local Storage Data Loader (Ensures deleted subjects NEVER automatically reappear)
+  // Local Storage Data Loader (Used when Supabase is not configured)
   const loadLocalData = () => {
     try {
-      // Get list of permanently deleted subject IDs (tombstones)
       const deletedIds = JSON.parse(
         localStorage.getItem(STORAGE_KEYS.DELETED_SUBJECT_IDS) || '[]'
       );
@@ -136,7 +131,7 @@ export function DataProvider({ children }) {
       const storedAnn = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
       const storedWarn = localStorage.getItem(STORAGE_KEYS.WARNINGS);
 
-      // 1. Subjects
+      // Subjects
       if (storedSubs !== null) {
         const parsed = JSON.parse(storedSubs).filter((s) => !deletedIds.includes(s.id));
         setSubjects(parsed);
@@ -146,7 +141,7 @@ export function DataProvider({ children }) {
         localStorage.setItem(STORAGE_KEYS.SUBJECTS, JSON.stringify(initial));
       }
 
-      // 2. Materials
+      // Materials
       if (storedMats !== null) {
         const parsedMats = JSON.parse(storedMats).filter((m) => !deletedIds.includes(m.subject_id));
         setMaterials(parsedMats);
@@ -156,7 +151,7 @@ export function DataProvider({ children }) {
         localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(initialMats));
       }
 
-      // 3. Announcements
+      // Announcements
       if (storedAnn !== null) {
         const parsedAnn = JSON.parse(storedAnn).filter((a) => !deletedIds.includes(a.subject_id));
         setAnnouncements(parsedAnn);
@@ -166,7 +161,7 @@ export function DataProvider({ children }) {
         localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(initialAnn));
       }
 
-      // 4. Student Warnings
+      // Student Warnings
       if (storedWarn !== null) {
         const parsedWarn = JSON.parse(storedWarn).filter((w) => !deletedIds.includes(w.subject_id));
         setWarnings(parsedWarn);
@@ -184,51 +179,97 @@ export function DataProvider({ children }) {
     }
   };
 
+  // Setup Initial Load, Tab Focus Re-sync, and Supabase Realtime Subscription
   useEffect(() => {
     loadData();
+
+    // Auto-refresh data when student switches back to this browser tab
+    const handleFocus = () => {
+      loadData();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Setup Supabase Realtime synchronization across all devices and browsers
+    let channel = null;
+    if (isSupabaseConfigured && supabase) {
+      try {
+        channel = supabase
+          .channel('study-hub-realtime-sync')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'subjects' }, () => {
+            loadData();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => {
+            loadData();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
+            loadData();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'warnings' }, () => {
+            loadData();
+          })
+          .subscribe();
+      } catch (e) {
+        console.warn('Realtime subscription error:', e);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, [loadData]);
 
-  // Sync state & storage helpers
+  // Serverless Admin Cloud Mutation Helper (bypasses RLS safely via serverless session)
+  const mutateCloudDatabase = async (action, table, data = null, id = null) => {
+    const res = await fetch('/api/admin/mutate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ action, table, data, id }),
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      throw new Error(result.error || `Failed to execute ${action} on ${table}`);
+    }
+
+    return result.data;
+  };
+
+  // Sync state & storage helpers for fallback
   const saveLocalSubjects = (newSubs) => {
     setSubjects(newSubs);
     try {
       localStorage.setItem(STORAGE_KEYS.SUBJECTS, JSON.stringify(newSubs));
-    } catch (e) {
-      console.warn('Failed to save subjects locally', e);
-    }
+    } catch {}
   };
 
   const saveLocalMaterials = (newMats) => {
     setMaterials(newMats);
     try {
       localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(newMats));
-    } catch (e) {
-      console.warn('Failed to save materials locally', e);
-    }
+    } catch {}
   };
 
   const saveLocalAnnouncements = (newAnn) => {
     setAnnouncements(newAnn);
     try {
       localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(newAnn));
-    } catch (e) {
-      console.warn('Failed to save announcements locally', e);
-    }
+    } catch {}
   };
 
   const saveLocalWarnings = (newWarn) => {
     setWarnings(newWarn);
     try {
       localStorage.setItem(STORAGE_KEYS.WARNINGS, JSON.stringify(newWarn));
-    } catch (e) {
-      console.warn('Failed to save warnings locally', e);
-    }
+    } catch {}
   };
 
   // Helper to clean all caches & register a permanent tombstone on deletion
   const cleanLocalStorageAfterSubjectDelete = (subjectId) => {
     try {
-      // 1. Add ID to permanent deleted tombstone list
       const deletedIds = JSON.parse(
         localStorage.getItem(STORAGE_KEYS.DELETED_SUBJECT_IDS) || '[]'
       );
@@ -237,35 +278,30 @@ export function DataProvider({ children }) {
         localStorage.setItem(STORAGE_KEYS.DELETED_SUBJECT_IDS, JSON.stringify(deletedIds));
       }
 
-      // 2. Remove subject from subjects storage
       const storedSubs = localStorage.getItem(STORAGE_KEYS.SUBJECTS);
       if (storedSubs) {
         const updatedSubs = JSON.parse(storedSubs).filter((s) => s.id !== subjectId);
         localStorage.setItem(STORAGE_KEYS.SUBJECTS, JSON.stringify(updatedSubs));
       }
 
-      // 3. Remove all associated materials
       const storedMats = localStorage.getItem(STORAGE_KEYS.MATERIALS);
       if (storedMats) {
         const updatedMats = JSON.parse(storedMats).filter((m) => m.subject_id !== subjectId);
         localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(updatedMats));
       }
 
-      // 4. Remove all associated announcements
       const storedAnn = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
       if (storedAnn) {
         const updatedAnn = JSON.parse(storedAnn).filter((a) => a.subject_id !== subjectId);
         localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(updatedAnn));
       }
 
-      // 5. Remove all associated student warnings
       const storedWarn = localStorage.getItem(STORAGE_KEYS.WARNINGS);
       if (storedWarn) {
         const updatedWarn = JSON.parse(storedWarn).filter((w) => w.subject_id !== subjectId);
         localStorage.setItem(STORAGE_KEYS.WARNINGS, JSON.stringify(updatedWarn));
       }
 
-      // 6. Clear student progress for this subject
       const storedProg = localStorage.getItem(STORAGE_KEYS.PROGRESS);
       if (storedProg) {
         const parsedProg = JSON.parse(storedProg);
@@ -274,7 +310,6 @@ export function DataProvider({ children }) {
         setProgress(parsedProg);
       }
 
-      // 7. Clear lastStudied if it referenced the deleted subject
       const storedLast = localStorage.getItem(STORAGE_KEYS.LAST_STUDIED);
       if (storedLast) {
         const parsedLast = JSON.parse(storedLast);
@@ -302,9 +337,7 @@ export function DataProvider({ children }) {
       const updated = { ...prev, [subjectId]: subProg };
       try {
         localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(updated));
-      } catch (e) {
-        console.warn('Error saving progress', e);
-      }
+      } catch {}
       return updated;
     });
   };
@@ -369,49 +402,47 @@ export function DataProvider({ children }) {
     setLastStudied(activity);
     try {
       localStorage.setItem(STORAGE_KEYS.LAST_STUDIED, JSON.stringify(activity));
-    } catch (e) {
-      console.warn('Failed to store last studied activity', e);
-    }
+    } catch {}
   };
 
   // ==========================================
-  // SUBJECT ACTIONS
+  // SUBJECT ACTIONS (SYNCHRONIZED TO CLOUD)
   // ==========================================
   const addSubject = async (subjectData) => {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('subjects')
-        .insert([{
-          name: subjectData.name.trim(),
-          code: subjectData.code?.trim() || '',
-          instructor: subjectData.instructor?.trim() || '',
-          semester: subjectData.semester?.trim() || 'Level 3 • Semester 1 • Core course',
-          description: subjectData.description?.trim() || '',
-          icon: subjectData.icon || 'BookOpen',
-          color: subjectData.color || 'blue',
-          order_index: subjects.length + 1,
-        }])
-        .select()
-        .single();
+    const payload = {
+      name: subjectData.name.trim(),
+      code: subjectData.code?.trim() || '',
+      instructor: subjectData.instructor?.trim() || '',
+      semester: subjectData.semester?.trim() || 'Level 3 • Semester 1 • Core course',
+      description: subjectData.description?.trim() || '',
+      icon: subjectData.icon || 'BookOpen',
+      color: subjectData.color || 'blue',
+      order_index: subjects.length + 1,
+    };
 
-      if (error) {
-        console.error('Supabase error inserting subject:', error);
-        throw new Error(`Failed to create subject in Supabase: ${error.message}`);
+    try {
+      // 1. Try serverless admin cloud mutation
+      const cloudData = await mutateCloudDatabase('insert', 'subjects', payload);
+      setSubjects((prev) => [...prev, cloudData]);
+      await loadData();
+      return cloudData;
+    } catch (err) {
+      // 2. Direct client Supabase fallback
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from('subjects')
+          .insert([payload])
+          .select()
+          .single();
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setSubjects((prev) => [...prev, data]);
+        return data;
       }
 
-      setSubjects((prev) => [...prev, data]);
-      return data;
-    } else {
+      console.warn('Cloud database unavailable, saving to local demo state:', err);
       const newSubject = {
+        ...payload,
         id: `sub-${Date.now()}`,
-        name: subjectData.name.trim(),
-        code: subjectData.code?.trim() || '',
-        instructor: subjectData.instructor?.trim() || 'Department Instructor',
-        semester: subjectData.semester?.trim() || 'Level 3 • Core course',
-        description: subjectData.description?.trim() || '',
-        icon: subjectData.icon || 'BookOpen',
-        color: subjectData.color || 'blue',
-        order_index: subjects.length + 1,
         created_at: new Date().toISOString(),
       };
       const updated = [...subjects, newSubject];
@@ -421,30 +452,34 @@ export function DataProvider({ children }) {
   };
 
   const updateSubject = async (id, updates) => {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('subjects')
-        .update({
-          name: updates.name?.trim(),
-          code: updates.code?.trim() || '',
-          instructor: updates.instructor?.trim() || '',
-          semester: updates.semester?.trim() || '',
-          description: updates.description?.trim() || '',
-          icon: updates.icon || 'BookOpen',
-          color: updates.color || 'blue',
-        })
-        .eq('id', id)
-        .select()
-        .single();
+    const payload = {
+      name: updates.name?.trim(),
+      code: updates.code?.trim() || '',
+      instructor: updates.instructor?.trim() || '',
+      semester: updates.semester?.trim() || '',
+      description: updates.description?.trim() || '',
+      icon: updates.icon || 'BookOpen',
+      color: updates.color || 'blue',
+    };
 
-      if (error) {
-        console.error('Supabase error updating subject:', error);
-        throw new Error(`Failed to update subject in Supabase: ${error.message}`);
+    try {
+      const cloudData = await mutateCloudDatabase('update', 'subjects', payload, id);
+      setSubjects((prev) => prev.map((s) => (s.id === id ? cloudData : s)));
+      return cloudData;
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from('subjects')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setSubjects((prev) => prev.map((s) => (s.id === id ? data : s)));
+        return data;
       }
 
-      setSubjects((prev) => prev.map((s) => (s.id === id ? data : s)));
-      return data;
-    } else {
+      console.warn('Cloud database unavailable, updating local demo state:', err);
       const updated = subjects.map((s) => (s.id === id ? { ...s, ...updates } : s));
       saveLocalSubjects(updated);
       return updated.find((s) => s.id === id);
@@ -454,49 +489,27 @@ export function DataProvider({ children }) {
   const deleteSubject = async (id) => {
     if (!id) throw new Error('Subject ID is required for deletion');
 
-    if (isSupabaseConfigured && supabase) {
-      // 1. Delete associated materials
-      const { error: matError } = await supabase
-        .from('materials')
-        .delete()
-        .eq('subject_id', id);
-
-      if (matError) throw new Error(`Failed to delete related materials: ${matError.message}`);
-
-      // 2. Delete associated announcements
-      try {
-        await supabase.from('announcements').delete().eq('subject_id', id);
-      } catch (err) {
-        console.warn('Note on deleting announcements:', err);
-      }
-
-      // 3. Delete associated warnings
-      try {
-        await supabase.from('warnings').delete().eq('subject_id', id);
-        await supabase.from('student_warnings').delete().eq('subject_id', id);
-      } catch (err) {
-        console.warn('Note on deleting warnings:', err);
-      }
-
-      // 4. Delete subject row
-      const { data, error } = await supabase
-        .from('subjects')
-        .delete()
-        .eq('id', id)
-        .select();
-
-      if (error) throw new Error(`Failed to delete subject from Supabase: ${error.message}`);
-
-      if (!data || data.length === 0) {
-        throw new Error('Supabase did not delete the subject. Either the ID was not found or your user lacks RLS permissions.');
-      }
-
-      // 5. Clean local caches
+    try {
+      await mutateCloudDatabase('delete', 'subjects', null, id);
       cleanLocalStorageAfterSubjectDelete(id);
-
-      // 6. Re-synchronize
+      setSubjects((prev) => prev.filter((s) => s.id !== id));
+      setMaterials((prev) => prev.filter((m) => m.subject_id !== id));
+      setAnnouncements((prev) => prev.filter((a) => a.subject_id !== id));
+      setWarnings((prev) => prev.filter((w) => w.subject_id !== id));
       await loadData();
-    } else {
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
+        await supabase.from('materials').delete().eq('subject_id', id);
+        await supabase.from('announcements').delete().eq('subject_id', id);
+        await supabase.from('warnings').delete().eq('subject_id', id);
+        const { error } = await supabase.from('subjects').delete().eq('id', id);
+        if (error) throw new Error(`Supabase delete failed: ${error.message}`);
+        cleanLocalStorageAfterSubjectDelete(id);
+        await loadData();
+        return;
+      }
+
+      console.warn('Cloud database unavailable, deleting from local demo state:', err);
       cleanLocalStorageAfterSubjectDelete(id);
       setSubjects((prev) => prev.filter((s) => s.id !== id));
       setMaterials((prev) => prev.filter((m) => m.subject_id !== id));
@@ -506,7 +519,7 @@ export function DataProvider({ children }) {
   };
 
   // ==========================================
-  // MATERIAL ACTIONS
+  // MATERIAL ACTIONS (SYNCHRONIZED TO CLOUD)
   // ==========================================
   const addMaterial = async (materialData) => {
     const payload = {
@@ -522,17 +535,23 @@ export function DataProvider({ children }) {
       file_size: materialData.file_size || '',
     };
 
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('materials')
-        .insert([payload])
-        .select()
-        .single();
+    try {
+      const cloudData = await mutateCloudDatabase('insert', 'materials', payload);
+      setMaterials((prev) => [cloudData, ...prev]);
+      return cloudData;
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from('materials')
+          .insert([payload])
+          .select()
+          .single();
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setMaterials((prev) => [data, ...prev]);
+        return data;
+      }
 
-      if (error) throw new Error(`Failed to create material in Supabase: ${error.message}`);
-      setMaterials((prev) => [data, ...prev]);
-      return data;
-    } else {
+      console.warn('Cloud database unavailable, saving material locally:', err);
       const newMaterial = {
         ...payload,
         id: `mat-${Date.now()}`,
@@ -557,18 +576,24 @@ export function DataProvider({ children }) {
       file_size: updates.file_size !== undefined ? updates.file_size : '',
     };
 
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('materials')
-        .update(payload)
-        .eq('id', id)
-        .select()
-        .single();
+    try {
+      const cloudData = await mutateCloudDatabase('update', 'materials', payload, id);
+      setMaterials((prev) => prev.map((m) => (m.id === id ? cloudData : m)));
+      return cloudData;
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from('materials')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setMaterials((prev) => prev.map((m) => (m.id === id ? data : m)));
+        return data;
+      }
 
-      if (error) throw new Error(`Failed to update material in Supabase: ${error.message}`);
-      setMaterials((prev) => prev.map((m) => (m.id === id ? data : m)));
-      return data;
-    } else {
+      console.warn('Cloud database unavailable, updating material locally:', err);
       const updated = materials.map((m) => (m.id === id ? { ...m, ...updates } : m));
       saveLocalMaterials(updated);
       return updated.find((m) => m.id === id);
@@ -576,32 +601,30 @@ export function DataProvider({ children }) {
   };
 
   const deleteMaterial = async (id) => {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('materials')
-        .delete()
-        .eq('id', id)
-        .select();
-
-      if (error) throw new Error(`Failed to delete material from Supabase: ${error.message}`);
-      if (!data || data.length === 0) {
-        throw new Error('Supabase did not delete the material: item not found or permission denied.');
-      }
-
+    try {
+      await mutateCloudDatabase('delete', 'materials', null, id);
       setMaterials((prev) => prev.filter((m) => m.id !== id));
       const stored = localStorage.getItem(STORAGE_KEYS.MATERIALS);
       if (stored) {
         const updated = JSON.parse(stored).filter((m) => m.id !== id);
         localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(updated));
       }
-    } else {
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.from('materials').delete().eq('id', id);
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setMaterials((prev) => prev.filter((m) => m.id !== id));
+        return;
+      }
+
+      console.warn('Cloud database unavailable, deleting material locally:', err);
       const updated = materials.filter((m) => m.id !== id);
       saveLocalMaterials(updated);
     }
   };
 
   // ==========================================
-  // ANNOUNCEMENTS ACTIONS
+  // ANNOUNCEMENTS ACTIONS (SYNCHRONIZED TO CLOUD)
   // ==========================================
   const addAnnouncement = async (annData) => {
     const payload = {
@@ -614,30 +637,31 @@ export function DataProvider({ children }) {
       created_at: new Date().toISOString(),
     };
 
-    if (isSupabaseConfigured && supabase) {
-      try {
+    try {
+      const cloudData = await mutateCloudDatabase('insert', 'announcements', payload);
+      setAnnouncements((prev) => [cloudData, ...prev]);
+      return cloudData;
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
         const { data, error } = await supabase
           .from('announcements')
           .insert([payload])
           .select()
           .single();
-        if (error) throw error;
-        if (data) {
-          setAnnouncements((prev) => [data, ...prev]);
-          return data;
-        }
-      } catch (e) {
-        console.warn('Supabase announcements insert failed, falling back to local', e);
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setAnnouncements((prev) => [data, ...prev]);
+        return data;
       }
-    }
 
-    const newAnn = {
-      ...payload,
-      id: `ann-${Date.now()}`,
-    };
-    const updated = [newAnn, ...announcements];
-    saveLocalAnnouncements(updated);
-    return newAnn;
+      console.warn('Cloud database unavailable, saving announcement locally:', err);
+      const newAnn = {
+        ...payload,
+        id: `ann-${Date.now()}`,
+      };
+      const updated = [newAnn, ...announcements];
+      saveLocalAnnouncements(updated);
+      return newAnn;
+    }
   };
 
   const updateAnnouncement = async (id, updates) => {
@@ -650,48 +674,55 @@ export function DataProvider({ children }) {
       expires_at: updates.expires_at || null,
     };
 
-    if (isSupabaseConfigured && supabase) {
-      try {
+    try {
+      const cloudData = await mutateCloudDatabase('update', 'announcements', payload, id);
+      setAnnouncements((prev) => prev.map((a) => (a.id === id ? cloudData : a)));
+      return cloudData;
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
         const { data, error } = await supabase
           .from('announcements')
           .update(payload)
           .eq('id', id)
           .select()
           .single();
-        if (error) throw error;
-        if (data) {
-          setAnnouncements((prev) => prev.map((a) => (a.id === id ? data : a)));
-          return data;
-        }
-      } catch (e) {
-        console.warn('Supabase update announcement failed', e);
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setAnnouncements((prev) => prev.map((a) => (a.id === id ? data : a)));
+        return data;
       }
-    }
 
-    const updated = announcements.map((a) => (a.id === id ? { ...a, ...payload } : a));
-    saveLocalAnnouncements(updated);
-    return updated.find((a) => a.id === id);
+      console.warn('Cloud database unavailable, updating announcement locally:', err);
+      const updated = announcements.map((a) => (a.id === id ? { ...a, ...payload } : a));
+      saveLocalAnnouncements(updated);
+      return updated.find((a) => a.id === id);
+    }
   };
 
   const deleteAnnouncement = async (id) => {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('announcements')
-          .delete()
-          .eq('id', id)
-          .select();
-        if (error) throw error;
-      } catch (e) {
-        console.warn('Supabase delete announcement error', e);
+    try {
+      await mutateCloudDatabase('delete', 'announcements', null, id);
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+      const stored = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
+      if (stored) {
+        const updated = JSON.parse(stored).filter((a) => a.id !== id);
+        localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(updated));
       }
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.from('announcements').delete().eq('id', id);
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+        return;
+      }
+
+      console.warn('Cloud database unavailable, deleting announcement locally:', err);
+      const updated = announcements.filter((a) => a.id !== id);
+      saveLocalAnnouncements(updated);
     }
-    const updated = announcements.filter((a) => a.id !== id);
-    saveLocalAnnouncements(updated);
   };
 
   // ==========================================
-  // WARNING PDF DOCUMENTS ACTIONS (PERMANENT SUPABASE STORAGE)
+  // WARNING PDF DOCUMENTS ACTIONS (SYNCHRONIZED TO CLOUD)
   // ==========================================
   const addWarning = async (warningData) => {
     const payload = {
@@ -704,23 +735,25 @@ export function DataProvider({ children }) {
       created_at: new Date().toISOString(),
     };
 
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('warnings')
-        .insert([payload])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase error inserting warning PDF:', error);
-        throw new Error(`Failed to save warning PDF in Supabase: ${error.message}`);
+    try {
+      const cloudData = await mutateCloudDatabase('insert', 'warnings', payload);
+      setWarnings((prev) => [cloudData, ...prev]);
+      saveLocalWarnings([cloudData, ...warnings]);
+      return cloudData;
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from('warnings')
+          .insert([payload])
+          .select()
+          .single();
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setWarnings((prev) => [data, ...prev]);
+        saveLocalWarnings([data, ...warnings]);
+        return data;
       }
 
-      setWarnings((prev) => [data, ...prev]);
-      // Update local storage cache
-      saveLocalWarnings([data, ...warnings]);
-      return data;
-    } else {
+      console.warn('Cloud database unavailable, saving warning PDF locally:', err);
       const newWarning = {
         ...payload,
         id: `warn-${Date.now()}`,
@@ -741,23 +774,26 @@ export function DataProvider({ children }) {
       file_size: updates.file_size !== undefined ? updates.file_size : '',
     };
 
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('warnings')
-        .update(payload)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase error updating warning PDF:', error);
-        throw new Error(`Failed to update warning PDF in Supabase: ${error.message}`);
+    try {
+      const cloudData = await mutateCloudDatabase('update', 'warnings', payload, id);
+      setWarnings((prev) => prev.map((w) => (w.id === id ? cloudData : w)));
+      saveLocalWarnings(warnings.map((w) => (w.id === id ? cloudData : w)));
+      return cloudData;
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from('warnings')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setWarnings((prev) => prev.map((w) => (w.id === id ? data : w)));
+        saveLocalWarnings(warnings.map((w) => (w.id === id ? data : w)));
+        return data;
       }
 
-      setWarnings((prev) => prev.map((w) => (w.id === id ? data : w)));
-      saveLocalWarnings(warnings.map((w) => (w.id === id ? data : w)));
-      return data;
-    } else {
+      console.warn('Cloud database unavailable, updating warning PDF locally:', err);
       const updated = warnings.map((w) => (w.id === id ? { ...w, ...payload } : w));
       saveLocalWarnings(updated);
       return updated.find((w) => w.id === id);
@@ -765,25 +801,20 @@ export function DataProvider({ children }) {
   };
 
   const deleteWarning = async (id) => {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('warnings')
-        .delete()
-        .eq('id', id)
-        .select();
-
-      if (error) {
-        console.error('Supabase error deleting warning PDF:', error);
-        throw new Error(`Failed to delete warning PDF from Supabase: ${error.message}`);
-      }
-
-      if (!data || data.length === 0) {
-        throw new Error('Supabase did not delete the warning: record not found or permission denied.');
-      }
-
+    try {
+      await mutateCloudDatabase('delete', 'warnings', null, id);
       setWarnings((prev) => prev.filter((w) => w.id !== id));
       saveLocalWarnings(warnings.filter((w) => w.id !== id));
-    } else {
+    } catch (err) {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.from('warnings').delete().eq('id', id);
+        if (error) throw new Error(`Supabase error: ${error.message}`);
+        setWarnings((prev) => prev.filter((w) => w.id !== id));
+        saveLocalWarnings(warnings.filter((w) => w.id !== id));
+        return;
+      }
+
+      console.warn('Cloud database unavailable, deleting warning PDF locally:', err);
       const updated = warnings.filter((w) => w.id !== id);
       saveLocalWarnings(updated);
     }
@@ -799,45 +830,73 @@ export function DataProvider({ children }) {
     });
   }, [announcements]);
 
-  // Upload file helper
-  const uploadFile = async (file, folder = 'lectures') => {
+  // Upload file to Supabase Cloud Storage
+  const uploadFile = async (file, folder = 'documents') => {
     if (!file) throw new Error('No file provided');
 
-    const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const filePath = `${folder}/${Date.now()}_${cleanFileName}`;
+    // Convert file to Base64 for the serverless upload endpoint
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
-    if (isSupabaseConfigured && supabase) {
-      const { error: uploadError } = await supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
+    try {
+      // 1. Try serverless admin upload to Supabase Storage
+      const res = await fetch('/api/admin/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type || 'application/pdf',
+          fileBase64: base64Data,
+          folder,
+        }),
+      });
 
-      if (uploadError) throw uploadError;
+      const result = await res.json();
+      if (res.ok && result.success) {
+        return {
+          file_url: result.file_url,
+          file_name: result.file_name,
+          file_size: result.file_size,
+        };
+      }
+      throw new Error(result.error || 'Server upload failed');
+    } catch (serverErr) {
+      // 2. Direct client Supabase Storage upload fallback
+      if (isSupabaseConfigured && supabase) {
+        const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filePath = `${folder}/${Date.now()}_${cleanFileName}`;
 
-      const { data } = supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .getPublicUrl(filePath);
+        const { error: uploadError } = await supabase.storage
+          .from(SUPABASE_STORAGE_BUCKET)
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false,
+          });
 
+        if (!uploadError) {
+          const { data } = supabase.storage
+            .from(SUPABASE_STORAGE_BUCKET)
+            .getPublicUrl(filePath);
+
+          return {
+            file_url: data.publicUrl,
+            file_name: file.name,
+            file_size: formatBytes(file.size),
+          };
+        }
+      }
+
+      console.warn('Cloud storage unavailable, using local file reader preview:', serverErr);
       return {
-        file_url: data.publicUrl,
+        file_url: base64Data,
         file_name: file.name,
         file_size: formatBytes(file.size),
       };
-    } else {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          resolve({
-            file_url: reader.result,
-            file_name: file.name,
-            file_size: formatBytes(file.size),
-          });
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
     }
   };
 
@@ -868,6 +927,7 @@ export function DataProvider({ children }) {
         warnings,
         loading,
         error,
+        isCloudConnected: isSupabaseConfigured,
         refreshData: loadData,
         // Subject operations
         addSubject,

@@ -35,6 +35,12 @@ function devApiPlugin() {
           } else if (pathname === '/api/admin/logout') {
             const { default: logoutHandler } = await import('./api/admin/logout.js');
             return await logoutHandler(req, res);
+          } else if (pathname === '/api/admin/mutate') {
+            const { default: mutateHandler } = await import('./api/admin/mutate.js');
+            return await mutateHandler(req, res);
+          } else if (pathname === '/api/admin/upload') {
+            const { default: uploadHandler } = await import('./api/admin/upload.js');
+            return await uploadHandler(req, res);
           }
         } catch (err) {
           console.error('Dev API middleware error:', err);
