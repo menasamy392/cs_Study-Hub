@@ -19,19 +19,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Ping Subjects table
-    const { count: subjectCount, error: subError } = await supabaseAdmin
+    // 1. Check if public.subjects table exists using GET with limit 1
+    const { data: subData, error: subError } = await supabaseAdmin
       .from('subjects')
-      .select('*', { count: 'exact', head: true });
+      .select('id')
+      .limit(1);
 
     if (subError) {
       // Check if project is connected but tables not yet created
       if (
-        subError.message &&
-        (subError.message.includes('Could not find the table') ||
-          subError.message.includes('relation "public.subjects" does not exist') ||
-          subError.code === 'PGRST205' ||
-          subError.code === '42P01')
+        subError.code === 'PGRST205' ||
+        subError.code === '42P01' ||
+        subError.message?.includes('Could not find the table') ||
+        subError.message?.includes('relation "public.subjects" does not exist') ||
+        subError.message?.includes('schema cache')
       ) {
         return res.status(200).json({
           connected: true,
@@ -51,18 +52,26 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2. Ping Materials, Announcements, Warnings tables
+    // 2. Fetch actual counts
+    const { count: subjectCount } = await supabaseAdmin
+      .from('subjects')
+      .select('*', { count: 'exact', head: false })
+      .limit(0);
+
     const { count: matCount } = await supabaseAdmin
       .from('materials')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: false })
+      .limit(0);
 
     const { count: annCount } = await supabaseAdmin
       .from('announcements')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: false })
+      .limit(0);
 
     const { count: warnCount } = await supabaseAdmin
       .from('warnings')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: false })
+      .limit(0);
 
     // 3. Check Storage Bucket
     let storageReady = false;
