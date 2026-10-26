@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
-import { supabase, isSupabaseConfigured, SUPABASE_STORAGE_BUCKET } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, supabaseConfigReason, SUPABASE_STORAGE_BUCKET } from '../lib/supabase';
 import { INITIAL_SUBJECTS, INITIAL_MATERIALS, INITIAL_ANNOUNCEMENTS, INITIAL_WARNINGS } from '../lib/mockData';
 
 const DataContext = createContext();
@@ -41,7 +41,7 @@ export function DataProvider({ children }) {
     }
   }, []);
 
-  // Load Data from Supabase Cloud or Fallback to LocalStorage
+  // Load Data directly from Supabase Cloud
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -55,7 +55,7 @@ export function DataProvider({ children }) {
           .order('order_index', { ascending: true })
           .order('name', { ascending: true });
 
-        if (subError) throw subError;
+        if (subError) throw new Error(`Supabase subjects error: ${subError.message}`);
 
         // 2. Fetch materials from Supabase
         const { data: matData, error: matError } = await supabase
@@ -64,7 +64,7 @@ export function DataProvider({ children }) {
           .order('number', { ascending: true })
           .order('created_at', { ascending: false });
 
-        if (matError) throw matError;
+        if (matError) throw new Error(`Supabase materials error: ${matError.message}`);
 
         // 3. Fetch announcements from Supabase
         let annData = [];
@@ -73,9 +73,8 @@ export function DataProvider({ children }) {
             .from('announcements')
             .select('*')
             .order('created_at', { ascending: false });
-          if (!annError && fetchedAnn) {
-            annData = fetchedAnn;
-          }
+          if (annError) throw annError;
+          annData = fetchedAnn || [];
         } catch (annErr) {
           console.warn('Note on announcements query:', annErr);
         }
@@ -87,9 +86,8 @@ export function DataProvider({ children }) {
             .from('warnings')
             .select('*')
             .order('created_at', { ascending: false });
-          if (!warnError && fetchedWarn) {
-            warnData = fetchedWarn;
-          }
+          if (warnError) throw warnError;
+          warnData = fetchedWarn || [];
         } catch (warnErr) {
           console.warn('Note on warnings query:', warnErr);
         }
@@ -99,7 +97,7 @@ export function DataProvider({ children }) {
         setAnnouncements(annData || []);
         setWarnings(warnData || []);
 
-        // Cache fresh cloud data in local storage for instant initial paint
+        // Cache fresh cloud data for offline resiliency
         try {
           localStorage.setItem(STORAGE_KEYS.SUBJECTS, JSON.stringify(subData || []));
           localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(matData || []));
@@ -107,71 +105,51 @@ export function DataProvider({ children }) {
           localStorage.setItem(STORAGE_KEYS.WARNINGS, JSON.stringify(warnData || []));
         } catch {}
       } catch (err) {
-        console.error('Error fetching Supabase data, falling back to local cache:', err);
-        setError(err.message || 'Failed to load data from Supabase');
-        loadLocalData();
+        console.error('Supabase query error:', err);
+        setError(err.message || 'Failed to load content from Supabase cloud database.');
+        loadLocalFallback();
       } finally {
         setLoading(false);
       }
     } else {
-      loadLocalData();
+      setError(supabaseConfigReason || 'Supabase cloud database is not connected.');
+      loadLocalFallback();
       setLoading(false);
     }
   }, []);
 
-  // Local Storage Data Loader (Used when Supabase is not configured)
-  const loadLocalData = () => {
+  // Fallback loader (preserves existing local view if cloud is disconnected)
+  const loadLocalFallback = () => {
     try {
-      const deletedIds = JSON.parse(
-        localStorage.getItem(STORAGE_KEYS.DELETED_SUBJECT_IDS) || '[]'
-      );
-
       const storedSubs = localStorage.getItem(STORAGE_KEYS.SUBJECTS);
       const storedMats = localStorage.getItem(STORAGE_KEYS.MATERIALS);
       const storedAnn = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
       const storedWarn = localStorage.getItem(STORAGE_KEYS.WARNINGS);
 
-      // Subjects
-      if (storedSubs !== null) {
-        const parsed = JSON.parse(storedSubs).filter((s) => !deletedIds.includes(s.id));
-        setSubjects(parsed);
+      if (storedSubs) {
+        setSubjects(JSON.parse(storedSubs));
       } else {
-        const initial = INITIAL_SUBJECTS.filter((s) => !deletedIds.includes(s.id));
-        setSubjects(initial);
-        localStorage.setItem(STORAGE_KEYS.SUBJECTS, JSON.stringify(initial));
+        setSubjects(INITIAL_SUBJECTS);
       }
 
-      // Materials
-      if (storedMats !== null) {
-        const parsedMats = JSON.parse(storedMats).filter((m) => !deletedIds.includes(m.subject_id));
-        setMaterials(parsedMats);
+      if (storedMats) {
+        setMaterials(JSON.parse(storedMats));
       } else {
-        const initialMats = INITIAL_MATERIALS.filter((m) => !deletedIds.includes(m.subject_id));
-        setMaterials(initialMats);
-        localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(initialMats));
+        setMaterials(INITIAL_MATERIALS);
       }
 
-      // Announcements
-      if (storedAnn !== null) {
-        const parsedAnn = JSON.parse(storedAnn).filter((a) => !deletedIds.includes(a.subject_id));
-        setAnnouncements(parsedAnn);
+      if (storedAnn) {
+        setAnnouncements(JSON.parse(storedAnn));
       } else {
-        const initialAnn = INITIAL_ANNOUNCEMENTS.filter((a) => !deletedIds.includes(a.subject_id));
-        setAnnouncements(initialAnn);
-        localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(initialAnn));
+        setAnnouncements(INITIAL_ANNOUNCEMENTS);
       }
 
-      // Student Warnings
-      if (storedWarn !== null) {
-        const parsedWarn = JSON.parse(storedWarn).filter((w) => !deletedIds.includes(w.subject_id));
-        setWarnings(parsedWarn);
+      if (storedWarn) {
+        setWarnings(JSON.parse(storedWarn));
       } else {
-        const initialWarn = INITIAL_WARNINGS.filter((w) => !deletedIds.includes(w.subject_id));
-        setWarnings(initialWarn);
-        localStorage.setItem(STORAGE_KEYS.WARNINGS, JSON.stringify(initialWarn));
+        setWarnings(INITIAL_WARNINGS);
       }
-    } catch (e) {
-      console.warn('LocalStorage error, using memory mock data', e);
+    } catch {
       setSubjects(INITIAL_SUBJECTS);
       setMaterials(INITIAL_MATERIALS);
       setAnnouncements(INITIAL_ANNOUNCEMENTS);
@@ -209,7 +187,7 @@ export function DataProvider({ children }) {
           })
           .subscribe();
       } catch (e) {
-        console.warn('Realtime subscription error:', e);
+        console.warn('Realtime subscription setup notice:', e);
       }
     }
 
@@ -221,7 +199,7 @@ export function DataProvider({ children }) {
     };
   }, [loadData]);
 
-  // Serverless Admin Cloud Mutation Helper (bypasses RLS safely via serverless session)
+  // Serverless Admin Cloud Mutation Helper (bypasses RLS safely via verified admin session)
   const mutateCloudDatabase = async (action, table, data = null, id = null) => {
     const res = await fetch('/api/admin/mutate', {
       method: 'POST',
@@ -238,46 +216,9 @@ export function DataProvider({ children }) {
     return result.data;
   };
 
-  // Sync state & storage helpers for fallback
-  const saveLocalSubjects = (newSubs) => {
-    setSubjects(newSubs);
-    try {
-      localStorage.setItem(STORAGE_KEYS.SUBJECTS, JSON.stringify(newSubs));
-    } catch {}
-  };
-
-  const saveLocalMaterials = (newMats) => {
-    setMaterials(newMats);
-    try {
-      localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(newMats));
-    } catch {}
-  };
-
-  const saveLocalAnnouncements = (newAnn) => {
-    setAnnouncements(newAnn);
-    try {
-      localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(newAnn));
-    } catch {}
-  };
-
-  const saveLocalWarnings = (newWarn) => {
-    setWarnings(newWarn);
-    try {
-      localStorage.setItem(STORAGE_KEYS.WARNINGS, JSON.stringify(newWarn));
-    } catch {}
-  };
-
-  // Helper to clean all caches & register a permanent tombstone on deletion
+  // Helper to clean all caches on subject delete
   const cleanLocalStorageAfterSubjectDelete = (subjectId) => {
     try {
-      const deletedIds = JSON.parse(
-        localStorage.getItem(STORAGE_KEYS.DELETED_SUBJECT_IDS) || '[]'
-      );
-      if (!deletedIds.includes(subjectId)) {
-        deletedIds.push(subjectId);
-        localStorage.setItem(STORAGE_KEYS.DELETED_SUBJECT_IDS, JSON.stringify(deletedIds));
-      }
-
       const storedSubs = localStorage.getItem(STORAGE_KEYS.SUBJECTS);
       if (storedSubs) {
         const updatedSubs = JSON.parse(storedSubs).filter((s) => s.id !== subjectId);
@@ -319,7 +260,7 @@ export function DataProvider({ children }) {
         }
       }
     } catch (e) {
-      console.warn('Error cleaning local storage after subject delete', e);
+      console.warn('Cache clean error:', e);
     }
   };
 
@@ -406,7 +347,7 @@ export function DataProvider({ children }) {
   };
 
   // ==========================================
-  // SUBJECT ACTIONS (SYNCHRONIZED TO CLOUD)
+  // SUBJECT ACTIONS (STRICT CLOUD PERSISTENCE)
   // ==========================================
   const addSubject = async (subjectData) => {
     const payload = {
@@ -421,33 +362,25 @@ export function DataProvider({ children }) {
     };
 
     try {
-      // 1. Try serverless admin cloud mutation
       const cloudData = await mutateCloudDatabase('insert', 'subjects', payload);
       setSubjects((prev) => [...prev, cloudData]);
       await loadData();
       return cloudData;
     } catch (err) {
-      // 2. Direct client Supabase fallback
       if (isSupabaseConfigured && supabase) {
         const { data, error } = await supabase
           .from('subjects')
           .insert([payload])
           .select()
           .single();
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase insert failed: ${error.message}`);
         setSubjects((prev) => [...prev, data]);
         return data;
       }
 
-      console.warn('Cloud database unavailable, saving to local demo state:', err);
-      const newSubject = {
-        ...payload,
-        id: `sub-${Date.now()}`,
-        created_at: new Date().toISOString(),
-      };
-      const updated = [...subjects, newSubject];
-      saveLocalSubjects(updated);
-      return newSubject;
+      throw new Error(
+        `Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}. Changes cannot be saved.`
+      );
     }
   };
 
@@ -474,15 +407,14 @@ export function DataProvider({ children }) {
           .eq('id', id)
           .select()
           .single();
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase update failed: ${error.message}`);
         setSubjects((prev) => prev.map((s) => (s.id === id ? data : s)));
         return data;
       }
 
-      console.warn('Cloud database unavailable, updating local demo state:', err);
-      const updated = subjects.map((s) => (s.id === id ? { ...s, ...updates } : s));
-      saveLocalSubjects(updated);
-      return updated.find((s) => s.id === id);
+      throw new Error(
+        `Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}. Changes cannot be saved.`
+      );
     }
   };
 
@@ -509,17 +441,14 @@ export function DataProvider({ children }) {
         return;
       }
 
-      console.warn('Cloud database unavailable, deleting from local demo state:', err);
-      cleanLocalStorageAfterSubjectDelete(id);
-      setSubjects((prev) => prev.filter((s) => s.id !== id));
-      setMaterials((prev) => prev.filter((m) => m.subject_id !== id));
-      setAnnouncements((prev) => prev.filter((a) => a.subject_id !== id));
-      setWarnings((prev) => prev.filter((w) => w.subject_id !== id));
+      throw new Error(
+        `Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}. Cannot delete subject from cloud.`
+      );
     }
   };
 
   // ==========================================
-  // MATERIAL ACTIONS (SYNCHRONIZED TO CLOUD)
+  // MATERIAL ACTIONS (STRICT CLOUD PERSISTENCE)
   // ==========================================
   const addMaterial = async (materialData) => {
     const payload = {
@@ -546,20 +475,12 @@ export function DataProvider({ children }) {
           .insert([payload])
           .select()
           .single();
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase material insert failed: ${error.message}`);
         setMaterials((prev) => [data, ...prev]);
         return data;
       }
 
-      console.warn('Cloud database unavailable, saving material locally:', err);
-      const newMaterial = {
-        ...payload,
-        id: `mat-${Date.now()}`,
-        created_at: new Date().toISOString(),
-      };
-      const updated = [newMaterial, ...materials];
-      saveLocalMaterials(updated);
-      return newMaterial;
+      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
     }
   };
 
@@ -588,15 +509,12 @@ export function DataProvider({ children }) {
           .eq('id', id)
           .select()
           .single();
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase material update failed: ${error.message}`);
         setMaterials((prev) => prev.map((m) => (m.id === id ? data : m)));
         return data;
       }
 
-      console.warn('Cloud database unavailable, updating material locally:', err);
-      const updated = materials.map((m) => (m.id === id ? { ...m, ...updates } : m));
-      saveLocalMaterials(updated);
-      return updated.find((m) => m.id === id);
+      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
     }
   };
 
@@ -612,19 +530,17 @@ export function DataProvider({ children }) {
     } catch (err) {
       if (isSupabaseConfigured && supabase) {
         const { error } = await supabase.from('materials').delete().eq('id', id);
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase material delete failed: ${error.message}`);
         setMaterials((prev) => prev.filter((m) => m.id !== id));
         return;
       }
 
-      console.warn('Cloud database unavailable, deleting material locally:', err);
-      const updated = materials.filter((m) => m.id !== id);
-      saveLocalMaterials(updated);
+      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
     }
   };
 
   // ==========================================
-  // ANNOUNCEMENTS ACTIONS (SYNCHRONIZED TO CLOUD)
+  // ANNOUNCEMENTS ACTIONS (STRICT CLOUD PERSISTENCE)
   // ==========================================
   const addAnnouncement = async (annData) => {
     const payload = {
@@ -648,19 +564,12 @@ export function DataProvider({ children }) {
           .insert([payload])
           .select()
           .single();
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase announcement insert failed: ${error.message}`);
         setAnnouncements((prev) => [data, ...prev]);
         return data;
       }
 
-      console.warn('Cloud database unavailable, saving announcement locally:', err);
-      const newAnn = {
-        ...payload,
-        id: `ann-${Date.now()}`,
-      };
-      const updated = [newAnn, ...announcements];
-      saveLocalAnnouncements(updated);
-      return newAnn;
+      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
     }
   };
 
@@ -686,15 +595,12 @@ export function DataProvider({ children }) {
           .eq('id', id)
           .select()
           .single();
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase announcement update failed: ${error.message}`);
         setAnnouncements((prev) => prev.map((a) => (a.id === id ? data : a)));
         return data;
       }
 
-      console.warn('Cloud database unavailable, updating announcement locally:', err);
-      const updated = announcements.map((a) => (a.id === id ? { ...a, ...payload } : a));
-      saveLocalAnnouncements(updated);
-      return updated.find((a) => a.id === id);
+      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
     }
   };
 
@@ -710,19 +616,17 @@ export function DataProvider({ children }) {
     } catch (err) {
       if (isSupabaseConfigured && supabase) {
         const { error } = await supabase.from('announcements').delete().eq('id', id);
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase announcement delete failed: ${error.message}`);
         setAnnouncements((prev) => prev.filter((a) => a.id !== id));
         return;
       }
 
-      console.warn('Cloud database unavailable, deleting announcement locally:', err);
-      const updated = announcements.filter((a) => a.id !== id);
-      saveLocalAnnouncements(updated);
+      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
     }
   };
 
   // ==========================================
-  // WARNING PDF DOCUMENTS ACTIONS (SYNCHRONIZED TO CLOUD)
+  // WARNING PDF DOCUMENTS ACTIONS (STRICT CLOUD PERSISTENCE)
   // ==========================================
   const addWarning = async (warningData) => {
     const payload = {
@@ -738,7 +642,6 @@ export function DataProvider({ children }) {
     try {
       const cloudData = await mutateCloudDatabase('insert', 'warnings', payload);
       setWarnings((prev) => [cloudData, ...prev]);
-      saveLocalWarnings([cloudData, ...warnings]);
       return cloudData;
     } catch (err) {
       if (isSupabaseConfigured && supabase) {
@@ -747,20 +650,12 @@ export function DataProvider({ children }) {
           .insert([payload])
           .select()
           .single();
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase warning insert failed: ${error.message}`);
         setWarnings((prev) => [data, ...prev]);
-        saveLocalWarnings([data, ...warnings]);
         return data;
       }
 
-      console.warn('Cloud database unavailable, saving warning PDF locally:', err);
-      const newWarning = {
-        ...payload,
-        id: `warn-${Date.now()}`,
-      };
-      const updated = [newWarning, ...warnings];
-      saveLocalWarnings(updated);
-      return newWarning;
+      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
     }
   };
 
@@ -777,7 +672,6 @@ export function DataProvider({ children }) {
     try {
       const cloudData = await mutateCloudDatabase('update', 'warnings', payload, id);
       setWarnings((prev) => prev.map((w) => (w.id === id ? cloudData : w)));
-      saveLocalWarnings(warnings.map((w) => (w.id === id ? cloudData : w)));
       return cloudData;
     } catch (err) {
       if (isSupabaseConfigured && supabase) {
@@ -787,16 +681,12 @@ export function DataProvider({ children }) {
           .eq('id', id)
           .select()
           .single();
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase warning update failed: ${error.message}`);
         setWarnings((prev) => prev.map((w) => (w.id === id ? data : w)));
-        saveLocalWarnings(warnings.map((w) => (w.id === id ? data : w)));
         return data;
       }
 
-      console.warn('Cloud database unavailable, updating warning PDF locally:', err);
-      const updated = warnings.map((w) => (w.id === id ? { ...w, ...payload } : w));
-      saveLocalWarnings(updated);
-      return updated.find((w) => w.id === id);
+      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
     }
   };
 
@@ -804,20 +694,40 @@ export function DataProvider({ children }) {
     try {
       await mutateCloudDatabase('delete', 'warnings', null, id);
       setWarnings((prev) => prev.filter((w) => w.id !== id));
-      saveLocalWarnings(warnings.filter((w) => w.id !== id));
     } catch (err) {
       if (isSupabaseConfigured && supabase) {
         const { error } = await supabase.from('warnings').delete().eq('id', id);
-        if (error) throw new Error(`Supabase error: ${error.message}`);
+        if (error) throw new Error(`Supabase warning delete failed: ${error.message}`);
         setWarnings((prev) => prev.filter((w) => w.id !== id));
-        saveLocalWarnings(warnings.filter((w) => w.id !== id));
         return;
       }
 
-      console.warn('Cloud database unavailable, deleting warning PDF locally:', err);
-      const updated = warnings.filter((w) => w.id !== id);
-      saveLocalWarnings(updated);
+      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
     }
+  };
+
+  // Seed Cloud Database with Initial Curriculum
+  const seedCloudDatabase = async () => {
+    const res = await fetch('/api/admin/mutate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        action: 'seed',
+        data: {
+          subjects: INITIAL_SUBJECTS,
+          materials: INITIAL_MATERIALS,
+          announcements: INITIAL_ANNOUNCEMENTS,
+        },
+      }),
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      throw new Error(result.error || 'Failed to seed cloud database');
+    }
+    await loadData();
+    return result;
   };
 
   // Filter out expired announcements automatically
@@ -866,7 +776,7 @@ export function DataProvider({ children }) {
       }
       throw new Error(result.error || 'Server upload failed');
     } catch (serverErr) {
-      // 2. Direct client Supabase Storage upload fallback
+      // 2. Direct client Supabase Storage upload fallback if configured
       if (isSupabaseConfigured && supabase) {
         const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const filePath = `${folder}/${Date.now()}_${cleanFileName}`;
@@ -891,12 +801,7 @@ export function DataProvider({ children }) {
         }
       }
 
-      console.warn('Cloud storage unavailable, using local file reader preview:', serverErr);
-      return {
-        file_url: base64Data,
-        file_name: file.name,
-        file_size: formatBytes(file.size),
-      };
+      throw new Error(`Cloud Storage Error: ${serverErr.message || supabaseConfigReason || 'Supabase Storage is not connected.'}`);
     }
   };
 
@@ -945,6 +850,8 @@ export function DataProvider({ children }) {
         addWarning,
         updateWarning,
         deleteWarning,
+        // Seed database
+        seedCloudDatabase,
         // Progress tracking
         progress,
         toggleLectureCompleted,

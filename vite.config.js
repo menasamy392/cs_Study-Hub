@@ -41,6 +41,9 @@ function devApiPlugin() {
           } else if (pathname === '/api/admin/upload') {
             const { default: uploadHandler } = await import('./api/admin/upload.js');
             return await uploadHandler(req, res);
+          } else if (pathname === '/api/admin/db-status') {
+            const { default: dbStatusHandler } = await import('./api/admin/db-status.js');
+            return await dbStatusHandler(req, res);
           }
         } catch (err) {
           console.error('Dev API middleware error:', err);

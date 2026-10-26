@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -83,10 +83,76 @@ export default function AdminDashboard() {
     deleteWarning,
     uploadFile,
     resetToDemoData,
+    seedCloudDatabase,
   } = useData();
   const { addToast } = useToast();
 
   const [activeTab, setActiveTab] = useState('materials'); // 'materials' | 'subjects' | 'announcements' | 'warnings' | 'supabase_setup'
+
+  // Live Supabase Database Health Check State
+  const [dbStatus, setDbStatus] = useState({
+    checking: true,
+    connected: false,
+    message: '',
+    error: '',
+    counts: null,
+    storageBucket: null,
+  });
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const checkDbConnectivity = useCallback(async () => {
+    setDbStatus((prev) => ({ ...prev, checking: true }));
+    try {
+      const res = await fetch('/api/admin/db-status', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setDbStatus({
+          checking: false,
+          connected: Boolean(data.connected),
+          message: data.message || '',
+          error: data.error || '',
+          counts: data.counts || null,
+          storageBucket: data.storageBucket || null,
+        });
+      } else {
+        setDbStatus({
+          checking: false,
+          connected: false,
+          message: '',
+          error: `HTTP ${res.status}: Failed to reach database status endpoint.`,
+          counts: null,
+          storageBucket: null,
+        });
+      }
+    } catch (err) {
+      setDbStatus({
+        checking: false,
+        connected: false,
+        message: '',
+        error: err.message || 'Network error reaching backend.',
+        counts: null,
+        storageBucket: null,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    checkDbConnectivity();
+  }, [checkDbConnectivity]);
+
+  const handleSeedDatabase = async () => {
+    if (!seedCloudDatabase) return;
+    try {
+      setIsSeeding(true);
+      const res = await seedCloudDatabase();
+      addToast(res.message || 'Seeded cloud database with curriculum!', 'success');
+      await checkDbConnectivity();
+    } catch (err) {
+      addToast(err.message || 'Failed to seed cloud database', 'error');
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   // Material Filters
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('all');
@@ -551,12 +617,28 @@ export default function AdminDashboard() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-900 border border-slate-800">
-              <span className={`w-2 h-2 rounded-full ${isConfigured ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-              <span className="text-slate-300">
-                {isConfigured ? 'Supabase Active' : 'Local Demo Active'}
+            <button
+              onClick={() => setActiveTab('supabase_setup')}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
+              title="Click to check Supabase cloud connection status"
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  dbStatus.checking
+                    ? 'bg-amber-400 animate-ping'
+                    : dbStatus.connected
+                    ? 'bg-emerald-500 animate-pulse'
+                    : 'bg-rose-500'
+                }`}
+              />
+              <span className={dbStatus.connected ? 'text-emerald-300' : 'text-rose-300'}>
+                {dbStatus.checking
+                  ? 'Verifying Cloud DB...'
+                  : dbStatus.connected
+                  ? 'Connected to Supabase'
+                  : 'Supabase Disconnected'}
               </span>
-            </div>
+            </button>
 
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-950/60 border border-blue-800/60 text-blue-300">
               <Shield className="w-3.5 h-3.5 text-blue-400" />
@@ -585,22 +667,22 @@ export default function AdminDashboard() {
       {/* Main Admin Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Warning banner when Supabase cloud database is not connected */}
-        {!isConfigured && (
-          <div className="p-4 sm:p-5 rounded-2xl bg-amber-950/30 border border-amber-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-amber-200 text-xs">
+        {!dbStatus.connected && !dbStatus.checking && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-rose-950/30 border border-rose-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-rose-200 text-xs">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold text-white text-sm">Supabase Cloud Database Not Connected</p>
-                <p className="text-amber-300/80 mt-0.5">
-                  Your changes currently only save in this specific browser. To synchronize lectures, quizzes, and subjects so that all students and devices see your updates, connect your Supabase database in Vercel.
+                <p className="text-rose-300/80 mt-0.5">
+                  {dbStatus.error || 'Changes cannot be saved to the cloud until valid Supabase credentials are configured in Vercel.'}
                 </p>
               </div>
             </div>
             <button
               onClick={() => setActiveTab('supabase_setup')}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shrink-0 transition-colors shadow-md"
+              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold shrink-0 transition-colors shadow-md"
             >
-              Connect Cloud Database →
+              Fix Cloud Connection →
             </button>
           </div>
         )}
@@ -1162,18 +1244,78 @@ export default function AdminDashboard() {
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#0F172A] border border-slate-800 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-white">Cloud Connection Status</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {isConfigured
-                    ? 'Connected to Supabase PostgreSQL & Realtime broadcasting active.'
-                    : 'Not Connected — running in browser-only mode. Updates are not visible to other devices until connected.'}
-                </p>
+            <div className="p-5 rounded-2xl bg-[#0F172A] border border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-white flex items-center gap-2">
+                    Cloud Connection Status:
+                    <span
+                      className={`text-xs font-bold px-3 py-1 rounded-full ${
+                        dbStatus.checking
+                          ? 'bg-amber-950/60 text-amber-300'
+                          : dbStatus.connected
+                          ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
+                          : 'bg-rose-950/60 text-rose-300 border border-rose-800/60'
+                      }`}
+                    >
+                      {dbStatus.checking
+                        ? 'Testing Connection...'
+                        : dbStatus.connected
+                        ? 'Connected to Supabase'
+                        : 'Supabase Disconnected'}
+                    </span>
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {dbStatus.connected
+                      ? 'All additions, edits, and deletions are saved to Supabase PostgreSQL and broadcast via Realtime.'
+                      : dbStatus.error || 'Database connection could not be established.'}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={checkDbConnectivity}
+                    disabled={dbStatus.checking}
+                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className={`w-3.5 h-3.5 ${dbStatus.checking ? 'animate-spin' : ''}`} />
+                    Test Connection
+                  </button>
+
+                  {dbStatus.connected && (
+                    <button
+                      onClick={handleSeedDatabase}
+                      disabled={isSeeding}
+                      className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      {isSeeding ? 'Seeding...' : 'Seed Curriculum'}
+                    </button>
+                  )}
+                </div>
               </div>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full ${isConfigured ? 'bg-emerald-900/60 text-emerald-300' : 'bg-amber-900/60 text-amber-300'}`}>
-                {isConfigured ? 'Cloud Connected' : 'Local Demo Mode'}
-              </span>
+
+              {/* Cloud Database Record Summary when Connected */}
+              {dbStatus.connected && dbStatus.counts && (
+                <div className="pt-3 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <p className="text-[11px] text-slate-400 font-medium">Subjects in DB</p>
+                    <p className="text-lg font-black text-white">{dbStatus.counts.subjects}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <p className="text-[11px] text-slate-400 font-medium">Materials / Lectures</p>
+                    <p className="text-lg font-black text-white">{dbStatus.counts.materials}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <p className="text-[11px] text-slate-400 font-medium">Announcements</p>
+                    <p className="text-lg font-black text-white">{dbStatus.counts.announcements}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <p className="text-[11px] text-slate-400 font-medium">Warning Documents</p>
+                    <p className="text-lg font-black text-white">{dbStatus.counts.warnings}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Step-by-Step Instructions */}

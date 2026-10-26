@@ -33,6 +33,43 @@ export default async function handler(req, res) {
     const body = await getRequestBody(req);
     const { action, table, data, id } = body || {};
 
+    // S. SEED INITIAL CURRICULUM
+    if (action === 'seed') {
+      const { subjects = [], materials = [], announcements = [] } = data || {};
+      let insertedSubs = 0;
+      let insertedMats = 0;
+      let insertedAnn = 0;
+
+      if (subjects.length > 0) {
+        const { error: sErr } = await supabaseAdmin
+          .from('subjects')
+          .upsert(subjects, { onConflict: 'id', ignoreDuplicates: true });
+        if (sErr) console.warn('Seed subjects warning:', sErr);
+        else insertedSubs = subjects.length;
+      }
+
+      if (materials.length > 0) {
+        const { error: mErr } = await supabaseAdmin
+          .from('materials')
+          .upsert(materials, { onConflict: 'id', ignoreDuplicates: true });
+        if (mErr) console.warn('Seed materials warning:', mErr);
+        else insertedMats = materials.length;
+      }
+
+      if (announcements.length > 0) {
+        const { error: aErr } = await supabaseAdmin
+          .from('announcements')
+          .upsert(announcements, { onConflict: 'id', ignoreDuplicates: true });
+        if (aErr) console.warn('Seed announcements warning:', aErr);
+        else insertedAnn = announcements.length;
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Successfully seeded ${insertedSubs} subjects, ${insertedMats} materials, and ${insertedAnn} announcements.`,
+      });
+    }
+
     if (!ALLOWED_TABLES.includes(table)) {
       return res.status(400).json({ error: `Invalid table: ${table}` });
     }

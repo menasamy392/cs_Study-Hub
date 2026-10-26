@@ -14,13 +14,36 @@ const supabaseKey =
   process.env.VITE_SUPABASE_ANON_KEY ||
   '';
 
-export const isServerSupabaseConfigured = Boolean(
-  supabaseUrl &&
-  supabaseKey &&
-  supabaseUrl.startsWith('https://') &&
-  !supabaseUrl.includes('your-project-id') &&
-  supabaseKey.length > 20
-);
+export function getServerSupabaseStatus() {
+  if (!supabaseUrl || !supabaseKey) {
+    return {
+      configured: false,
+      reason: 'Missing SUPABASE_URL (or VITE_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or VITE_SUPABASE_ANON_KEY).',
+    };
+  }
+
+  if (
+    supabaseUrl.includes('abcdefghijkl') ||
+    supabaseUrl.includes('your-project-id') ||
+    !supabaseUrl.startsWith('https://')
+  ) {
+    return {
+      configured: false,
+      reason: `Placeholder Supabase URL detected: "${supabaseUrl}". Please replace it with your real Supabase project URL (https://xyz.supabase.co) in Vercel settings.`,
+    };
+  }
+
+  if (supabaseKey === 'anon public' || supabaseKey.length < 30) {
+    return {
+      configured: false,
+      reason: `Placeholder Supabase key detected: "${supabaseKey}". Please replace it with your actual Supabase anon key or service_role key in Vercel settings.`,
+    };
+  }
+
+  return { configured: true, reason: 'Ready' };
+}
+
+export const isServerSupabaseConfigured = getServerSupabaseStatus().configured;
 
 export const supabaseAdmin = isServerSupabaseConfigured
   ? createClient(supabaseUrl, supabaseKey, {
