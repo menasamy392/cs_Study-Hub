@@ -1,5 +1,5 @@
 import { parseCookies, verifySessionToken, COOKIE_NAME } from '../_auth.js';
-import { supabaseAdmin, supabaseUrl, STORAGE_BUCKET } from '../_supabase.js';
+import { supabaseAdmin, supabaseUrl, supabaseKey, STORAGE_BUCKET } from '../_supabase.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -26,52 +26,43 @@ export default async function handler(req, res) {
       .limit(1);
 
     if (subError) {
-      // Check if project is connected but tables not yet created
-      if (
+      const isMissingTable =
         subError.code === 'PGRST205' ||
         subError.code === '42P01' ||
         subError.message?.includes('Could not find the table') ||
         subError.message?.includes('relation "public.subjects" does not exist') ||
-        subError.message?.includes('schema cache')
-      ) {
-        return res.status(200).json({
-          connected: true,
-          configured: true,
-          tablesReady: false,
-          projectRef: 'qksklthfpbcwseiqpajq',
-          url: supabaseUrl,
-          message:
-            'Connected to Supabase Cloud Project (qksklthfpbcwseiqpajq)! Database tables are not created yet. Please execute the SQL schema in Supabase SQL Editor.',
-        });
-      }
+        subError.message?.includes('schema cache');
 
       return res.status(200).json({
-        connected: false,
+        connected: true,
         configured: true,
-        error: `Supabase query error: ${subError.message}`,
+        tablesReady: !isMissingTable,
+        projectRef: 'qksklthfpbcwseiqpajq',
+        url: supabaseUrl,
+        keyPrefix: supabaseKey ? supabaseKey.substring(0, 15) + '...' : 'none',
+        subError: subError,
+        message: isMissingTable
+          ? 'Connected to Supabase Cloud Project (qksklthfpbcwseiqpajq)! Database tables are not created yet. Please execute the SQL schema in Supabase SQL Editor.'
+          : `Supabase query error: ${subError.message}`,
       });
     }
 
     // 2. Fetch actual counts
     const { count: subjectCount } = await supabaseAdmin
       .from('subjects')
-      .select('*', { count: 'exact', head: false })
-      .limit(0);
+      .select('*', { count: 'exact' });
 
     const { count: matCount } = await supabaseAdmin
       .from('materials')
-      .select('*', { count: 'exact', head: false })
-      .limit(0);
+      .select('*', { count: 'exact' });
 
     const { count: annCount } = await supabaseAdmin
       .from('announcements')
-      .select('*', { count: 'exact', head: false })
-      .limit(0);
+      .select('*', { count: 'exact' });
 
     const { count: warnCount } = await supabaseAdmin
       .from('warnings')
-      .select('*', { count: 'exact', head: false })
-      .limit(0);
+      .select('*', { count: 'exact' });
 
     // 3. Check Storage Bucket
     let storageReady = false;
@@ -90,6 +81,7 @@ export default async function handler(req, res) {
       tablesReady: true,
       projectRef: 'qksklthfpbcwseiqpajq',
       url: supabaseUrl,
+      keyPrefix: supabaseKey ? supabaseKey.substring(0, 15) + '...' : 'none',
       counts: {
         subjects: subjectCount || 0,
         materials: matCount || 0,
