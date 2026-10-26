@@ -1328,14 +1328,14 @@ export default function AdminDashboard() {
                 <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
                   <p className="font-bold text-blue-400 mb-1">Step 1: Get Supabase Credentials</p>
                   <p className="text-slate-400">
-                    Open your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">Supabase Dashboard</a> $\rightarrow$ Project Settings $\rightarrow$ <strong>API</strong>. Copy your <strong>Project URL</strong>, <strong>anon public key</strong>, and <strong>service_role secret key</strong>.
+                    Open your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">Supabase Dashboard</a> → Project Settings → <strong>API</strong>. Copy your <strong>Project URL</strong>, <strong>anon public key</strong>, and <strong>service_role secret key</strong>.
                   </p>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
                   <p className="font-bold text-blue-400 mb-1">Step 2: Add Environment Variables in Vercel</p>
                   <p className="text-slate-400 mb-2">
-                    Open <a href="https://vercel.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">Vercel Dashboard</a> $\rightarrow$ your Project $\rightarrow$ <strong>Settings</strong> $\rightarrow$ <strong>Environment Variables</strong>:
+                    Open <a href="https://vercel.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">Vercel Dashboard</a> → your Project → <strong>Settings</strong> → <strong>Environment Variables</strong>:
                   </p>
                   <ul className="space-y-1 font-mono text-[11px] text-slate-200">
                     <li className="bg-slate-950 px-2.5 py-1.5 rounded border border-slate-800/80 flex items-center justify-between">
