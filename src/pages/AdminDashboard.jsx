@@ -35,6 +35,7 @@ import { useData } from '../context/DataContext';
 import { useToast } from '../components/Toast';
 import ConfirmationModal from '../components/ConfirmationModal';
 import FilePreviewModal from '../components/FilePreviewModal';
+import { SCHEMA_SQL } from '../lib/schemaSql';
 
 const AVAILABLE_ICONS = [
   'BookOpen',
@@ -93,12 +94,15 @@ export default function AdminDashboard() {
   const [dbStatus, setDbStatus] = useState({
     checking: true,
     connected: false,
+    tablesReady: false,
+    projectRef: 'qksklthfpbcwseiqpajq',
     message: '',
     error: '',
     counts: null,
     storageBucket: null,
   });
   const [isSeeding, setIsSeeding] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
 
   const checkDbConnectivity = useCallback(async () => {
     setDbStatus((prev) => ({ ...prev, checking: true }));
@@ -109,6 +113,8 @@ export default function AdminDashboard() {
         setDbStatus({
           checking: false,
           connected: Boolean(data.connected),
+          tablesReady: Boolean(data.tablesReady),
+          projectRef: data.projectRef || 'qksklthfpbcwseiqpajq',
           message: data.message || '',
           error: data.error || '',
           counts: data.counts || null,
@@ -118,6 +124,8 @@ export default function AdminDashboard() {
         setDbStatus({
           checking: false,
           connected: false,
+          tablesReady: false,
+          projectRef: 'qksklthfpbcwseiqpajq',
           message: '',
           error: `HTTP ${res.status}: Failed to reach database status endpoint.`,
           counts: null,
@@ -128,6 +136,8 @@ export default function AdminDashboard() {
       setDbStatus({
         checking: false,
         connected: false,
+        tablesReady: false,
+        projectRef: 'qksklthfpbcwseiqpajq',
         message: '',
         error: err.message || 'Network error reaching backend.',
         counts: null,
@@ -626,16 +636,20 @@ export default function AdminDashboard() {
                 className={`w-2 h-2 rounded-full ${
                   dbStatus.checking
                     ? 'bg-amber-400 animate-ping'
-                    : dbStatus.connected
+                    : dbStatus.connected && dbStatus.tablesReady
                     ? 'bg-emerald-500 animate-pulse'
+                    : dbStatus.connected
+                    ? 'bg-amber-400'
                     : 'bg-rose-500'
                 }`}
               />
-              <span className={dbStatus.connected ? 'text-emerald-300' : 'text-rose-300'}>
+              <span className={dbStatus.connected && dbStatus.tablesReady ? 'text-emerald-300' : dbStatus.connected ? 'text-amber-300' : 'text-rose-300'}>
                 {dbStatus.checking
                   ? 'Verifying Cloud DB...'
-                  : dbStatus.connected
+                  : dbStatus.connected && dbStatus.tablesReady
                   ? 'Connected to Supabase'
+                  : dbStatus.connected
+                  ? 'Supabase: Tables Needed'
                   : 'Supabase Disconnected'}
               </span>
             </button>
@@ -666,6 +680,37 @@ export default function AdminDashboard() {
 
       {/* Main Admin Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Banner when Supabase is connected but tables need to be created */}
+        {dbStatus.connected && !dbStatus.tablesReady && !dbStatus.checking && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-950/40 border border-amber-600/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-amber-200 text-xs">
+            <div className="flex items-start gap-3">
+              <Database className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-white text-sm">Supabase Project Connected — Database Tables Needed</p>
+                <p className="text-amber-300/80 mt-0.5">
+                  Your website is connected to project <code className="text-amber-200 bg-amber-950/60 px-1.5 py-0.5 rounded font-mono">qksklthfpbcwseiqpajq</code>! To enable permanent cloud synchronization across all users, run the SQL schema in Supabase SQL Editor.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href="https://supabase.com/dashboard/project/qksklthfpbcwseiqpajq/sql/new"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shrink-0 transition-colors shadow-md flex items-center gap-1.5"
+              >
+                Open SQL Editor <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+              <button
+                onClick={() => setActiveTab('supabase_setup')}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition-colors"
+              >
+                View SQL Script
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Warning banner when Supabase cloud database is not connected */}
         {!dbStatus.connected && !dbStatus.checking && (
           <div className="p-4 sm:p-5 rounded-2xl bg-rose-950/30 border border-rose-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-rose-200 text-xs">
@@ -1253,21 +1298,27 @@ export default function AdminDashboard() {
                       className={`text-xs font-bold px-3 py-1 rounded-full ${
                         dbStatus.checking
                           ? 'bg-amber-950/60 text-amber-300'
-                          : dbStatus.connected
+                          : dbStatus.connected && dbStatus.tablesReady
                           ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
+                          : dbStatus.connected
+                          ? 'bg-amber-950/60 text-amber-300 border border-amber-800/60'
                           : 'bg-rose-950/60 text-rose-300 border border-rose-800/60'
                       }`}
                     >
                       {dbStatus.checking
                         ? 'Testing Connection...'
+                        : dbStatus.connected && dbStatus.tablesReady
+                        ? 'Connected & Tables Ready'
                         : dbStatus.connected
-                        ? 'Connected to Supabase'
+                        ? 'Connected (Tables Pending)'
                         : 'Supabase Disconnected'}
                     </span>
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    {dbStatus.connected
-                      ? 'All additions, edits, and deletions are saved to Supabase PostgreSQL and broadcast via Realtime.'
+                    {dbStatus.connected && dbStatus.tablesReady
+                      ? 'Connected to Supabase PostgreSQL (qksklthfpbcwseiqpajq). All additions, edits, and deletions are saved to Supabase and broadcast via Realtime.'
+                      : dbStatus.connected
+                      ? 'Connected to Supabase project qksklthfpbcwseiqpajq! Run the SQL schema below to create the database tables.'
                       : dbStatus.error || 'Database connection could not be established.'}
                   </p>
                 </div>
@@ -1282,7 +1333,7 @@ export default function AdminDashboard() {
                     Test Connection
                   </button>
 
-                  {dbStatus.connected && (
+                  {dbStatus.connected && dbStatus.tablesReady && (
                     <button
                       onClick={handleSeedDatabase}
                       disabled={isSeeding}
@@ -1295,8 +1346,8 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Cloud Database Record Summary when Connected */}
-              {dbStatus.connected && dbStatus.counts && (
+              {/* Cloud Database Record Summary when Connected and Tables Ready */}
+              {dbStatus.connected && dbStatus.tablesReady && dbStatus.counts && (
                 <div className="pt-3 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
                     <p className="text-[11px] text-slate-400 font-medium">Subjects in DB</p>
@@ -1317,6 +1368,47 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
+
+            {/* If tables are pending, show the 1-Click SQL Schema Runner section */}
+            {dbStatus.connected && !dbStatus.tablesReady && (
+              <div className="p-5 rounded-2xl bg-amber-950/20 border border-amber-600/60 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <Database className="w-5 h-5 text-amber-400" />
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Execute SQL Schema in Supabase</h3>
+                      <p className="text-xs text-amber-300/80">Copy the schema below, paste it into the Supabase SQL Editor, and click "Run".</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(SCHEMA_SQL);
+                        setCopiedSql(true);
+                        addToast('SQL schema copied to clipboard!', 'success');
+                        setTimeout(() => setCopiedSql(false), 3000);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md"
+                    >
+                      {copiedSql ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      {copiedSql ? 'Copied to Clipboard!' : 'Copy Schema SQL'}
+                    </button>
+                    <a
+                      href="https://supabase.com/dashboard/project/qksklthfpbcwseiqpajq/sql/new"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-700"
+                    >
+                      Open Supabase SQL Editor <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-[11px] text-slate-300 font-mono max-h-48 overflow-y-auto">
+                  <pre>{SCHEMA_SQL.substring(0, 1000)}... ({SCHEMA_SQL.split('\n').length} lines total)</pre>
+                </div>
+              </div>
+            )}
 
             {/* Step-by-Step Instructions */}
             <div className="space-y-4 pt-2 border-t border-slate-800">
