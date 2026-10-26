@@ -558,6 +558,11 @@ export default function AdminDashboard() {
               </span>
             </div>
 
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-950/60 border border-blue-800/60 text-blue-300">
+              <Shield className="w-3.5 h-3.5 text-blue-400" />
+              <span>{user?.username || 'minasami'}</span>
+            </div>
+
             <Link
               to="/"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition-colors"

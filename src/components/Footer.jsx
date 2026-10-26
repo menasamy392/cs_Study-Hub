@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Shield } from 'lucide-react';
 
 export default function Footer() {
   return (
@@ -30,13 +29,6 @@ export default function Footer() {
             <a href="/#subjects" className="hover:text-blue-400 transition-colors">
               Subjects
             </a>
-            <Link
-              to="/admin"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition-colors text-xs font-semibold"
-            >
-              <Shield className="w-3.5 h-3.5 text-blue-400" />
-              Admin Portal
-            </Link>
           </div>
         </div>
 

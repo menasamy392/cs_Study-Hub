@@ -901,13 +901,6 @@ export default function SubjectDetailsPage() {
                     {isAuthSubmitting ? 'Verifying...' : 'Verify Identity & Access Warnings'}
                   </button>
                 </form>
-
-                <div className="mt-6 pt-5 border-t border-slate-800 text-xs text-slate-500">
-                  Are you a department faculty member or administrator?{' '}
-                  <Link to="/admin" className="text-blue-400 hover:underline font-semibold">
-                    Admin Portal Sign In →
-                  </Link>
-                </div>
               </div>
             ) : (
               /* AUTHORIZED VIEW: DISPLAY WARNING PDF DOCUMENTS */

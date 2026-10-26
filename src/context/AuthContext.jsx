@@ -15,29 +15,106 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [isDemoMode, setIsDemoMode] = useState(!isSupabaseConfigured);
 
-  useEffect(() => {
-    if (isSupabaseConfigured && supabase) {
-      // Get current Supabase session
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        const u = session?.user ?? null;
-        setUser(u);
-        if (u && !u.email?.toLowerCase().includes('admin') && u.user_metadata?.role !== 'admin') {
-          setStudentUser({
-            id: u.id,
-            email: u.email,
-            name: u.user_metadata?.name || u.email?.split('@')[0],
-            studentId: u.user_metadata?.student_id || '',
-          });
-        }
-        setLoading(false);
+  // Check server-side admin session via HttpOnly cookie
+  const checkAdminServerSession = async () => {
+    try {
+      const res = await fetch('/api/admin/session', {
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache' },
+        credentials: 'include',
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated && data.user) {
+          const adminObj = {
+            id: 'admin-server-session',
+            username: data.user.username,
+            name: data.user.name || 'Study Hub Administrator',
+            role: 'admin',
+            email: `${data.user.username}@studyhub.internal`,
+            user_metadata: { role: 'admin', name: data.user.name || 'Study Hub Administrator' },
+          };
+          setUser(adminObj);
+          return adminObj;
+        }
+      }
+    } catch (e) {
+      console.warn('Admin session check unreachable:', e);
+    }
+    return null;
+  };
 
-      // Listen for auth changes
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        (_event, session) => {
-          const u = session?.user ?? null;
-          setUser(u);
-          if (u && !u.email?.toLowerCase().includes('admin') && u.user_metadata?.role !== 'admin') {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initAuth() {
+      // Clean up any deprecated legacy admin credentials from localStorage
+      try {
+        const legacy = localStorage.getItem(STORAGE_KEYS.LEGACY_ADMIN) || localStorage.getItem(STORAGE_KEYS.ADMIN_SESSION);
+        if (legacy) {
+          try {
+            const parsed = JSON.parse(legacy);
+            if (parsed.email === 'admin@csstudyhub.edu' || parsed.id === 'mock-admin-001') {
+              localStorage.removeItem(STORAGE_KEYS.LEGACY_ADMIN);
+              localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+            }
+          } catch {
+            localStorage.removeItem(STORAGE_KEYS.LEGACY_ADMIN);
+            localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+          }
+        }
+      } catch {}
+
+      // 1. Verify server-side admin session first
+      const adminSession = await checkAdminServerSession();
+
+      if (!adminSession) {
+        // If not admin, check Supabase session if configured
+        if (isSupabaseConfigured && supabase) {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const u = session?.user ?? null;
+            if (isMounted) {
+              setUser(u);
+              if (u && !u.email?.toLowerCase().includes('admin') && u.user_metadata?.role !== 'admin') {
+                setStudentUser({
+                  id: u.id,
+                  email: u.email,
+                  name: u.user_metadata?.name || u.email?.split('@')[0],
+                  studentId: u.user_metadata?.student_id || '',
+                });
+              }
+            }
+          } catch (err) {
+            console.warn('Error fetching Supabase session:', err);
+          }
+        } else {
+          // Check student session for demo/local mode
+          try {
+            const storedStudent = localStorage.getItem(STORAGE_KEYS.STUDENT_SESSION);
+            if (storedStudent && isMounted) {
+              setStudentUser(JSON.parse(storedStudent));
+            }
+          } catch (e) {
+            console.warn('Error reading stored student session', e);
+          }
+        }
+      }
+
+      if (isMounted) {
+        setLoading(false);
+      }
+    }
+
+    initAuth();
+
+    // Listen for Supabase auth changes for student accounts
+    let subscription = null;
+    if (isSupabaseConfigured && supabase) {
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        const u = session?.user ?? null;
+        if (!u?.email?.toLowerCase().includes('admin') && u?.user_metadata?.role !== 'admin') {
+          if (u) {
             setStudentUser({
               id: u.id,
               email: u.email,
@@ -47,87 +124,74 @@ export function AuthProvider({ children }) {
           } else {
             setStudentUser(null);
           }
-          setLoading(false);
         }
-      );
-
-      return () => subscription.unsubscribe();
-    } else {
-      // Check stored admin session
-      try {
-        const storedAdmin =
-          localStorage.getItem(STORAGE_KEYS.ADMIN_SESSION) ||
-          localStorage.getItem(STORAGE_KEYS.LEGACY_ADMIN);
-        if (storedAdmin) {
-          setUser(JSON.parse(storedAdmin));
-        }
-
-        const storedStudent = localStorage.getItem(STORAGE_KEYS.STUDENT_SESSION);
-        if (storedStudent) {
-          setStudentUser(JSON.parse(storedStudent));
-        }
-      } catch (e) {
-        console.warn('Error reading mock sessions', e);
-      }
-      setLoading(false);
+      });
+      subscription = data.subscription;
     }
+
+    return () => {
+      isMounted = false;
+      if (subscription) subscription.unsubscribe();
+    };
   }, []);
 
-  // Admin Sign In
-  const signIn = async (email, password) => {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
-      return data;
-    } else {
-      // Mock admin authentication for development/demo
-      if ((email === 'admin@csstudyhub.edu' || email === 'admin@demo.com' || email === 'admin@studyhub.edu') && password === 'admin123') {
-        const mockUser = {
-          id: 'mock-admin-001',
-          email,
-          role: 'authenticated',
-          user_metadata: { name: 'CS Department Admin', role: 'admin' },
-        };
-        setUser(mockUser);
-        localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, JSON.stringify(mockUser));
-        return { user: mockUser };
-      } else {
-        throw new Error('Invalid demo credentials. Use: admin@csstudyhub.edu / admin123');
-      }
-    }
-  };
+  // Admin Sign In - Secure Server-Side Endpoint
+  const signIn = async (usernameOrEmail, password) => {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        username: usernameOrEmail,
+        password: password,
+      }),
+    });
 
-  const signOut = async () => {
-    if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      setUser(null);
-      setStudentUser(null);
-    } else {
-      setUser(null);
-      localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
-      localStorage.removeItem(STORAGE_KEYS.LEGACY_ADMIN);
-    }
-  };
+    const data = await res.json();
 
-  const demoLogin = () => {
-    const mockUser = {
-      id: 'mock-admin-001',
-      email: 'admin@csstudyhub.edu',
-      role: 'authenticated',
-      user_metadata: { name: 'CS Department Admin', role: 'admin' },
+    if (!res.ok) {
+      throw new Error(data.error || 'Authentication failed. Please verify credentials.');
+    }
+
+    const adminUser = {
+      id: 'admin-server-session',
+      username: data.user?.username || 'minasami',
+      name: data.user?.name || 'Study Hub Administrator',
+      role: 'admin',
+      email: `${data.user?.username || 'minasami'}@studyhub.internal`,
+      user_metadata: { role: 'admin', name: data.user?.name || 'Study Hub Administrator' },
     };
-    setUser(mockUser);
-    localStorage.setItem(STORAGE_KEYS.ADMIN_SESSION, JSON.stringify(mockUser));
+
+    setUser(adminUser);
+    return { user: adminUser };
+  };
+
+  // Sign Out
+  const signOut = async () => {
+    try {
+      await fetch('/api/admin/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.warn('Logout server request failed:', err);
+    }
+
+    setUser(null);
+    setStudentUser(null);
+    localStorage.removeItem(STORAGE_KEYS.ADMIN_SESSION);
+    localStorage.removeItem(STORAGE_KEYS.LEGACY_ADMIN);
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase.auth.signOut().catch(() => {});
+    }
   };
 
   // Student Authentication
   const loginStudent = async ({ email, studentId, name, password }) => {
     if (isSupabaseConfigured && supabase) {
-      // In Supabase, try signing in with email & password
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
@@ -136,7 +200,6 @@ export function AuthProvider({ children }) {
         if (error) throw error;
         return data;
       } catch (err) {
-        // If user doesn't exist yet, attempt signup
         const { data, error: signUpErr } = await supabase.auth.signUp({
           email,
           password: password || 'student123',
@@ -168,12 +231,16 @@ export function AuthProvider({ children }) {
     setStudentUser(null);
     localStorage.removeItem(STORAGE_KEYS.STUDENT_SESSION);
     if (isSupabaseConfigured && supabase && !user?.email?.toLowerCase().includes('admin')) {
-      supabase.auth.signOut();
+      supabase.auth.signOut().catch(() => {});
     }
   };
 
   const isAdmin = Boolean(
-    user && (user.email?.toLowerCase().includes('admin') || user.user_metadata?.role === 'admin')
+    user &&
+      (user.role === 'admin' ||
+        user.user_metadata?.role === 'admin' ||
+        user.username === 'minasami' ||
+        user.email?.toLowerCase().includes('admin'))
   );
 
   const isStudent = Boolean(studentUser);
@@ -190,7 +257,6 @@ export function AuthProvider({ children }) {
         isDemoMode,
         signIn,
         signOut,
-        demoLogin,
         loginStudent,
         logoutStudent,
       }}
