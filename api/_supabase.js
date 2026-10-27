@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { SESSION_SECRET } from './_auth.js';
 
 // Server-side Supabase configuration
 const rawUrl = (
@@ -48,11 +49,31 @@ export function getServerSupabaseStatus() {
 
 export const isServerSupabaseConfigured = true;
 
+// Create serverless client with admin secret header for RLS verification
 export const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: false,
     autoRefreshToken: false,
   },
+  global: {
+    headers: {
+      'x-admin-secret': SESSION_SECRET,
+    },
+  },
 });
 
 export const STORAGE_BUCKET = 'materials';
+
+// Helper to safely extract relative storage path from full Supabase Storage URL
+export function extractStoragePath(fileUrl, bucket = STORAGE_BUCKET) {
+  if (!fileUrl || typeof fileUrl !== 'string') return null;
+  const marker = `/storage/v1/object/public/${bucket}/`;
+  const idx = fileUrl.indexOf(marker);
+  if (idx !== -1) {
+    const rawPath = fileUrl.substring(idx + marker.length);
+    // Remove query params if any
+    const cleanPath = rawPath.split('?')[0];
+    return decodeURIComponent(cleanPath);
+  }
+  return null;
+}

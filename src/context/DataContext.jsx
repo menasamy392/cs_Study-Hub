@@ -11,8 +11,27 @@ const STORAGE_KEYS = {
   WARNINGS: 'study_hub_pdf_warnings_v3',
   PROGRESS: 'study_hub_progress_v2',
   LAST_STUDIED: 'study_hub_last_studied_v2',
-  DELETED_SUBJECT_IDS: 'study_hub_deleted_subject_ids',
+  DELETED_IDS: 'study_hub_deleted_ids_v3',
 };
+
+// Safe helpers for tombstoned (deleted) records
+function getDeletedIdsSet() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELETED_IDS);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markItemDeleted(id) {
+  if (!id) return;
+  try {
+    const set = getDeletedIdsSet();
+    set.add(id);
+    localStorage.setItem(STORAGE_KEYS.DELETED_IDS, JSON.stringify([...set]));
+  } catch {}
+}
 
 export function DataProvider({ children }) {
   const [subjects, setSubjects] = useState([]);
@@ -48,6 +67,8 @@ export function DataProvider({ children }) {
 
     if (isSupabaseConfigured && supabase) {
       try {
+        const deletedSet = getDeletedIdsSet();
+
         // 1. Fetch subjects from Supabase
         const { data: subData, error: subError } = await supabase
           .from('subjects')
@@ -92,17 +113,29 @@ export function DataProvider({ children }) {
           console.warn('Note on warnings query:', warnErr);
         }
 
-        setSubjects(subData || []);
-        setMaterials(matData || []);
-        setAnnouncements(annData || []);
-        setWarnings(warnData || []);
+        // Filter out any tombstoned/deleted records
+        const activeSubs = (subData || []).filter((s) => !deletedSet.has(s.id));
+        const activeMats = (matData || []).filter(
+          (m) => !deletedSet.has(m.id) && !deletedSet.has(m.subject_id)
+        );
+        const activeAnn = (annData || []).filter(
+          (a) => !deletedSet.has(a.id) && !deletedSet.has(a.subject_id)
+        );
+        const activeWarn = (warnData || []).filter(
+          (w) => !deletedSet.has(w.id) && !deletedSet.has(w.subject_id)
+        );
+
+        setSubjects(activeSubs);
+        setMaterials(activeMats);
+        setAnnouncements(activeAnn);
+        setWarnings(activeWarn);
 
         // Cache fresh cloud data for offline resiliency
         try {
-          localStorage.setItem(STORAGE_KEYS.SUBJECTS, JSON.stringify(subData || []));
-          localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(matData || []));
-          localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(annData || []));
-          localStorage.setItem(STORAGE_KEYS.WARNINGS, JSON.stringify(warnData || []));
+          localStorage.setItem(STORAGE_KEYS.SUBJECTS, JSON.stringify(activeSubs));
+          localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(activeMats));
+          localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(activeAnn));
+          localStorage.setItem(STORAGE_KEYS.WARNINGS, JSON.stringify(activeWarn));
         } catch {}
       } catch (err) {
         console.error('Supabase query error:', err);
@@ -121,39 +154,27 @@ export function DataProvider({ children }) {
   // Fallback loader (preserves existing local view if cloud is disconnected)
   const loadLocalFallback = () => {
     try {
+      const deletedSet = getDeletedIdsSet();
       const storedSubs = localStorage.getItem(STORAGE_KEYS.SUBJECTS);
       const storedMats = localStorage.getItem(STORAGE_KEYS.MATERIALS);
       const storedAnn = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
       const storedWarn = localStorage.getItem(STORAGE_KEYS.WARNINGS);
 
-      if (storedSubs) {
-        setSubjects(JSON.parse(storedSubs));
-      } else {
-        setSubjects(INITIAL_SUBJECTS);
-      }
+      const rawSubs = storedSubs ? JSON.parse(storedSubs) : INITIAL_SUBJECTS;
+      const rawMats = storedMats ? JSON.parse(storedMats) : INITIAL_MATERIALS;
+      const rawAnn = storedAnn ? JSON.parse(storedAnn) : INITIAL_ANNOUNCEMENTS;
+      const rawWarn = storedWarn ? JSON.parse(storedWarn) : INITIAL_WARNINGS;
 
-      if (storedMats) {
-        setMaterials(JSON.parse(storedMats));
-      } else {
-        setMaterials(INITIAL_MATERIALS);
-      }
-
-      if (storedAnn) {
-        setAnnouncements(JSON.parse(storedAnn));
-      } else {
-        setAnnouncements(INITIAL_ANNOUNCEMENTS);
-      }
-
-      if (storedWarn) {
-        setWarnings(JSON.parse(storedWarn));
-      } else {
-        setWarnings(INITIAL_WARNINGS);
-      }
+      setSubjects((rawSubs || []).filter((s) => !deletedSet.has(s.id)));
+      setMaterials((rawMats || []).filter((m) => !deletedSet.has(m.id) && !deletedSet.has(m.subject_id)));
+      setAnnouncements((rawAnn || []).filter((a) => !deletedSet.has(a.id) && !deletedSet.has(a.subject_id)));
+      setWarnings((rawWarn || []).filter((w) => !deletedSet.has(w.id) && !deletedSet.has(w.subject_id)));
     } catch {
-      setSubjects(INITIAL_SUBJECTS);
-      setMaterials(INITIAL_MATERIALS);
-      setAnnouncements(INITIAL_ANNOUNCEMENTS);
-      setWarnings(INITIAL_WARNINGS);
+      const deletedSet = getDeletedIdsSet();
+      setSubjects(INITIAL_SUBJECTS.filter((s) => !deletedSet.has(s.id)));
+      setMaterials(INITIAL_MATERIALS.filter((m) => !deletedSet.has(m.id) && !deletedSet.has(m.subject_id)));
+      setAnnouncements(INITIAL_ANNOUNCEMENTS.filter((a) => !deletedSet.has(a.id) && !deletedSet.has(a.subject_id)));
+      setWarnings(INITIAL_WARNINGS.filter((w) => !deletedSet.has(w.id) && !deletedSet.has(w.subject_id)));
     }
   };
 
@@ -421,30 +442,20 @@ export function DataProvider({ children }) {
   const deleteSubject = async (id) => {
     if (!id) throw new Error('Subject ID is required for deletion');
 
-    try {
-      await mutateCloudDatabase('delete', 'subjects', null, id);
-      cleanLocalStorageAfterSubjectDelete(id);
-      setSubjects((prev) => prev.filter((s) => s.id !== id));
-      setMaterials((prev) => prev.filter((m) => m.subject_id !== id));
-      setAnnouncements((prev) => prev.filter((a) => a.subject_id !== id));
-      setWarnings((prev) => prev.filter((w) => w.subject_id !== id));
-      await loadData();
-    } catch (err) {
-      if (isSupabaseConfigured && supabase) {
-        await supabase.from('materials').delete().eq('subject_id', id);
-        await supabase.from('announcements').delete().eq('subject_id', id);
-        await supabase.from('warnings').delete().eq('subject_id', id);
-        const { error } = await supabase.from('subjects').delete().eq('id', id);
-        if (error) throw new Error(`Supabase delete failed: ${error.message}`);
-        cleanLocalStorageAfterSubjectDelete(id);
-        await loadData();
-        return;
-      }
+    // 1. Permanently delete from Supabase via serverless admin mutation
+    await mutateCloudDatabase('delete', 'subjects', null, id);
 
-      throw new Error(
-        `Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}. Cannot delete subject from cloud.`
-      );
-    }
+    // 2. Mark as permanently deleted in local tombstone blacklist
+    markItemDeleted(id);
+
+    // 3. Immediately clean local storage caches
+    cleanLocalStorageAfterSubjectDelete(id);
+
+    // 4. Update in-memory state
+    setSubjects((prev) => prev.filter((s) => s.id !== id));
+    setMaterials((prev) => prev.filter((m) => m.subject_id !== id));
+    setAnnouncements((prev) => prev.filter((a) => a.subject_id !== id));
+    setWarnings((prev) => prev.filter((w) => w.subject_id !== id));
   };
 
   // ==========================================
@@ -519,24 +530,19 @@ export function DataProvider({ children }) {
   };
 
   const deleteMaterial = async (id) => {
+    if (!id) throw new Error('Material ID is required for deletion');
+
+    await mutateCloudDatabase('delete', 'materials', null, id);
+    markItemDeleted(id);
+
+    setMaterials((prev) => prev.filter((m) => m.id !== id));
     try {
-      await mutateCloudDatabase('delete', 'materials', null, id);
-      setMaterials((prev) => prev.filter((m) => m.id !== id));
       const stored = localStorage.getItem(STORAGE_KEYS.MATERIALS);
       if (stored) {
         const updated = JSON.parse(stored).filter((m) => m.id !== id);
         localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(updated));
       }
-    } catch (err) {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.from('materials').delete().eq('id', id);
-        if (error) throw new Error(`Supabase material delete failed: ${error.message}`);
-        setMaterials((prev) => prev.filter((m) => m.id !== id));
-        return;
-      }
-
-      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
-    }
+    } catch {}
   };
 
   // ==========================================
@@ -605,24 +611,19 @@ export function DataProvider({ children }) {
   };
 
   const deleteAnnouncement = async (id) => {
+    if (!id) throw new Error('Announcement ID is required for deletion');
+
+    await mutateCloudDatabase('delete', 'announcements', null, id);
+    markItemDeleted(id);
+
+    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
     try {
-      await mutateCloudDatabase('delete', 'announcements', null, id);
-      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
       const stored = localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS);
       if (stored) {
         const updated = JSON.parse(stored).filter((a) => a.id !== id);
         localStorage.setItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(updated));
       }
-    } catch (err) {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.from('announcements').delete().eq('id', id);
-        if (error) throw new Error(`Supabase announcement delete failed: ${error.message}`);
-        setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-        return;
-      }
-
-      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
-    }
+    } catch {}
   };
 
   // ==========================================
@@ -691,19 +692,19 @@ export function DataProvider({ children }) {
   };
 
   const deleteWarning = async (id) => {
-    try {
-      await mutateCloudDatabase('delete', 'warnings', null, id);
-      setWarnings((prev) => prev.filter((w) => w.id !== id));
-    } catch (err) {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.from('warnings').delete().eq('id', id);
-        if (error) throw new Error(`Supabase warning delete failed: ${error.message}`);
-        setWarnings((prev) => prev.filter((w) => w.id !== id));
-        return;
-      }
+    if (!id) throw new Error('Warning ID is required for deletion');
 
-      throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
-    }
+    await mutateCloudDatabase('delete', 'warnings', null, id);
+    markItemDeleted(id);
+
+    setWarnings((prev) => prev.filter((w) => w.id !== id));
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.WARNINGS);
+      if (stored) {
+        const updated = JSON.parse(stored).filter((w) => w.id !== id);
+        localStorage.setItem(STORAGE_KEYS.WARNINGS, JSON.stringify(updated));
+      }
+    } catch {}
   };
 
   // Seed Cloud Database with Initial Curriculum
@@ -813,7 +814,7 @@ export function DataProvider({ children }) {
     localStorage.removeItem(STORAGE_KEYS.WARNINGS);
     localStorage.removeItem(STORAGE_KEYS.PROGRESS);
     localStorage.removeItem(STORAGE_KEYS.LAST_STUDIED);
-    localStorage.removeItem(STORAGE_KEYS.DELETED_SUBJECT_IDS);
+    localStorage.removeItem(STORAGE_KEYS.DELETED_IDS);
     setSubjects(INITIAL_SUBJECTS);
     setMaterials(INITIAL_MATERIALS);
     setAnnouncements(INITIAL_ANNOUNCEMENTS);

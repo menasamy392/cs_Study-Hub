@@ -913,15 +913,30 @@ export default function AdminDashboard() {
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() =>
+                                onClick={() => {
+                                  const typeLabel =
+                                    mat.type === 'lecture'
+                                      ? 'Lecture'
+                                      : mat.type === 'section'
+                                      ? 'Section'
+                                      : mat.type === 'quiz'
+                                      ? 'Quiz'
+                                      : 'Study Notes';
                                   setDeleteModal({
                                     isOpen: true,
                                     type: 'material',
                                     id: mat.id,
                                     title: mat.title,
-                                  })
-                                }
+                                    typeName: typeLabel,
+                                    details: [
+                                      `Category: ${typeLabel}`,
+                                      mat.file_name ? `Cloud file: ${mat.file_name}` : 'No cloud file attached',
+                                      'Record and associated cloud storage files will be permanently deleted.',
+                                    ],
+                                  });
+                                }}
                                 className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
+                                title="Delete material"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -997,6 +1012,7 @@ export default function AdminDashboard() {
                             type: 'subject',
                             id: sub.id,
                             title: sub.name,
+                            typeName: 'Subject',
                             details: details.length > 0 ? details : ['All subject records and student progress will be removed.'],
                           });
                         }}
@@ -1065,15 +1081,23 @@ export default function AdminDashboard() {
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() =>
+                        onClick={() => {
+                          const sub = subjects.find((s) => s.id === ann.subject_id);
                           setDeleteModal({
                             isOpen: true,
                             type: 'announcement',
                             id: ann.id,
                             title: ann.title,
-                          })
-                        }
+                            typeName: 'Announcement',
+                            details: [
+                              `Subject: ${sub?.name || 'All Subjects'}`,
+                              `Category: ${ann.category}`,
+                              'This announcement will be permanently removed for all students.',
+                            ],
+                          });
+                        }}
                         className="p-2 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
+                        title="Delete announcement"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1251,6 +1275,7 @@ export default function AdminDashboard() {
                                       type: 'warning',
                                       id: warn.id,
                                       title: warn.title,
+                                      typeName: 'Warning Document',
                                       details: [
                                         `Subject: ${sub?.name || 'Department'}`,
                                         `File: ${warn.file_name || 'PDF Document'}`,
@@ -1887,17 +1912,18 @@ export default function AdminDashboard() {
       <ConfirmationModal
         isOpen={deleteModal.isOpen}
         title={`Permanently Delete ${
-          deleteModal.type === 'subject'
+          deleteModal.typeName ||
+          (deleteModal.type === 'subject'
             ? 'Subject'
             : deleteModal.type === 'material'
             ? 'Material'
             : deleteModal.type === 'warning'
             ? 'Warning PDF'
-            : 'Announcement'
+            : 'Announcement')
         }?`}
         message={`Are you sure you want to permanently delete "${deleteModal.title}"?`}
         details={deleteModal.details}
-        confirmText="Permanently Delete"
+        confirmText={isSaving ? 'Deleting...' : 'Permanently Delete'}
         confirmVariant="danger"
         isLoading={isSaving}
         onConfirm={confirmDelete}
