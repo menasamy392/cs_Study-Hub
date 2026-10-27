@@ -237,15 +237,22 @@ export default async function handler(req, res) {
       if (!confirmedDeleted) {
         console.log(`Direct delete returned 0 rows or error for ${table} (${id}), trying admin_delete_record RPC...`);
         const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc('admin_delete_record', {
-          p_secret: SESSION_SECRET,
-          p_table: table,
           p_id: id,
+          p_table: table,
+          p_secret: SESSION_SECRET,
         });
 
         if (rpcErr) {
           console.error(`RPC admin_delete_record failed for ${table}:`, rpcErr);
+          const isMissing =
+            rpcErr.code === 'PGRST202' ||
+            rpcErr.message?.includes('schema cache') ||
+            rpcErr.message?.includes('admin_delete_record');
+
           return res.status(500).json({
-            error: `Database deletion failed: ${deleteError?.message || rpcErr.message}. Make sure you have executed the latest SQL migration in your Supabase SQL Editor.`,
+            error: isMissing
+              ? 'Supabase SQL Migration Required: The database delete procedure is not active in your Supabase project yet. Please open Supabase SQL Editor and execute the migration script (or add SUPABASE_SERVICE_ROLE_KEY in Vercel).'
+              : `Database deletion failed: ${deleteError?.message || rpcErr.message}.`,
             requiresMigration: true,
           });
         }

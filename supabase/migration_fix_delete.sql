@@ -1,9 +1,9 @@
 -- ==============================================================================
--- CS Study Hub: Delete & Admin Mutation RLS & RPC Migration
+-- CS Study Hub: Complete Delete & Admin Mutation RLS & RPC Migration
 -- Run this in Supabase Dashboard -> SQL Editor -> Run
 -- ==============================================================================
 
--- 1. Helper function to check admin secret from request headers or direct parameter
+-- 1. Helper function to check admin secret from request headers or service_role
 CREATE OR REPLACE FUNCTION public.is_admin_request()
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -22,7 +22,7 @@ BEGIN
     -- Check x-admin-secret header sent by serverless backend
     BEGIN
         v_headers := current_setting('request.headers', true)::json;
-        v_secret := v_headers->>'x-admin-secret';
+        v_secret := COALESCE(v_headers->>'x-admin-secret', v_headers->>'X-Admin-Secret');
         IF v_secret = 'study-hub-secure-admin-session-salt-2026-minasami-b7e8d9c0a1f2e3d4' THEN
             RETURN true;
         END IF;
@@ -78,9 +78,6 @@ DROP POLICY IF EXISTS "Admins can delete warnings" ON public.warnings;
 CREATE POLICY "Admins can delete warnings" ON public.warnings FOR DELETE USING (public.is_admin_request());
 
 -- Storage Bucket Policies
-DROP POLICY IF EXISTS "Allow uploads to materials" ON storage.objects;
-CREATE POLICY "Allow uploads to materials" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'materials' AND (public.is_admin_request() OR true));
-
 DROP POLICY IF EXISTS "Allow updates to materials" ON storage.objects;
 CREATE POLICY "Allow updates to materials" ON storage.objects FOR UPDATE USING (bucket_id = 'materials' AND public.is_admin_request());
 
@@ -88,10 +85,11 @@ DROP POLICY IF EXISTS "Allow deletes to materials" ON storage.objects;
 CREATE POLICY "Allow deletes to materials" ON storage.objects FOR DELETE USING (bucket_id = 'materials' AND (public.is_admin_request() OR true));
 
 -- 3. Dedicated Permanent Delete RPC (Bypasses RLS safely via SECURITY DEFINER)
+-- Matches PostgREST parameter signature: p_id, p_table, p_secret
 CREATE OR REPLACE FUNCTION public.admin_delete_record(
-    p_secret TEXT,
+    p_id TEXT,
     p_table TEXT,
-    p_id TEXT
+    p_secret TEXT DEFAULT ''
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -102,15 +100,25 @@ DECLARE
     v_deleted_count INT := 0;
     v_deleted_files TEXT[] := ARRAY[]::TEXT[];
 BEGIN
-    -- Verify internal server secret
-    IF p_secret IS NULL OR p_secret <> 'study-hub-secure-admin-session-salt-2026-minasami-b7e8d9c0a1f2e3d4' THEN
-        RAISE EXCEPTION 'Unauthorized: Invalid admin secret token';
+    -- 1. Validate requested table name to prevent SQL injection
+    IF p_table NOT IN ('subjects', 'materials', 'announcements', 'warnings') THEN
+        RAISE EXCEPTION 'Invalid table name: %', p_table;
+    END IF;
+
+    -- 2. Validate record ID
+    IF p_id IS NULL OR length(trim(p_id)) = 0 THEN
+        RAISE EXCEPTION 'Record ID cannot be empty';
+    END IF;
+
+    -- 3. Verify serverless admin secret or service_role authorization
+    IF auth.role() <> 'service_role' AND (p_secret IS NULL OR p_secret <> 'study-hub-secure-admin-session-salt-2026-minasami-b7e8d9c0a1f2e3d4') THEN
+        RAISE EXCEPTION 'Unauthorized: Invalid admin secret or authorization role';
     END IF;
 
     -- A. Subjects: Cascade delete children and gather files
     IF p_table = 'subjects' THEN
         SELECT COALESCE(ARRAY_AGG(file_url), ARRAY[]::TEXT[]) INTO v_deleted_files 
-        FROM public.materials WHERE subject_id = p_id AND file_url <> '';
+        FROM public.materials WHERE subject_id = p_id AND file_url IS NOT NULL AND file_url <> '';
 
         DELETE FROM public.materials WHERE subject_id = p_id;
         DELETE FROM public.announcements WHERE subject_id = p_id;
@@ -121,7 +129,7 @@ BEGIN
     -- B. Materials (Lectures, Sections, Quizzes, Study Notes)
     ELSIF p_table = 'materials' THEN
         SELECT COALESCE(ARRAY_AGG(file_url), ARRAY[]::TEXT[]) INTO v_deleted_files 
-        FROM public.materials WHERE id = p_id AND file_url <> '';
+        FROM public.materials WHERE id = p_id AND file_url IS NOT NULL AND file_url <> '';
 
         DELETE FROM public.materials WHERE id = p_id;
         GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
@@ -134,13 +142,10 @@ BEGIN
     -- D. Warnings (Student Academic Warning PDFs)
     ELSIF p_table = 'warnings' THEN
         SELECT COALESCE(ARRAY_AGG(file_url), ARRAY[]::TEXT[]) INTO v_deleted_files 
-        FROM public.warnings WHERE id = p_id AND file_url <> '';
+        FROM public.warnings WHERE id = p_id AND file_url IS NOT NULL AND file_url <> '';
 
         DELETE FROM public.warnings WHERE id = p_id;
         GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
-
-    ELSE
-        RAISE EXCEPTION 'Invalid table name: %', p_table;
     END IF;
 
     RETURN jsonb_build_object(
@@ -171,7 +176,7 @@ AS $$
 DECLARE
     v_result JSONB;
 BEGIN
-    IF p_secret IS NULL OR p_secret <> 'study-hub-secure-admin-session-salt-2026-minasami-b7e8d9c0a1f2e3d4' THEN
+    IF auth.role() <> 'service_role' AND (p_secret IS NULL OR p_secret <> 'study-hub-secure-admin-session-salt-2026-minasami-b7e8d9c0a1f2e3d4') THEN
         RAISE EXCEPTION 'Unauthorized: Invalid admin secret token';
     END IF;
 
@@ -293,3 +298,6 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.admin_mutate_record(TEXT, TEXT, TEXT, JSONB, TEXT) TO anon, authenticated, service_role;
+
+-- 5. Force PostgREST to immediately refresh its schema cache
+NOTIFY pgrst, 'reload schema';
