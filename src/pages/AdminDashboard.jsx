@@ -29,13 +29,15 @@ import {
   ShieldAlert,
   Eye,
   Download,
+  Terminal,
+  Key,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../components/Toast';
 import ConfirmationModal from '../components/ConfirmationModal';
 import FilePreviewModal from '../components/FilePreviewModal';
-import { SCHEMA_SQL } from '../lib/schemaSql';
+import { SCHEMA_SQL, MIGRATION_DELETE_SQL } from '../lib/schemaSql';
 
 const AVAILABLE_ICONS = [
   'BookOpen',
@@ -95,6 +97,8 @@ export default function AdminDashboard() {
     checking: true,
     connected: false,
     tablesReady: false,
+    deleteProcedureReady: false,
+    hasServiceRoleKey: false,
     projectRef: 'qksklthfpbcwseiqpajq',
     message: '',
     error: '',
@@ -103,6 +107,8 @@ export default function AdminDashboard() {
   });
   const [isSeeding, setIsSeeding] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
+  const [copiedMigrationSql, setCopiedMigrationSql] = useState(false);
 
   const checkDbConnectivity = useCallback(async () => {
     setDbStatus((prev) => ({ ...prev, checking: true }));
@@ -114,6 +120,8 @@ export default function AdminDashboard() {
           checking: false,
           connected: Boolean(data.connected),
           tablesReady: Boolean(data.tablesReady),
+          deleteProcedureReady: Boolean(data.deleteProcedureReady),
+          hasServiceRoleKey: Boolean(data.hasServiceRoleKey),
           projectRef: data.projectRef || 'qksklthfpbcwseiqpajq',
           message: data.message || '',
           error: data.error || '',
@@ -125,6 +133,8 @@ export default function AdminDashboard() {
           checking: false,
           connected: false,
           tablesReady: false,
+          deleteProcedureReady: false,
+          hasServiceRoleKey: false,
           projectRef: 'qksklthfpbcwseiqpajq',
           message: '',
           error: `HTTP ${res.status}: Failed to reach database status endpoint.`,
@@ -137,6 +147,8 @@ export default function AdminDashboard() {
         checking: false,
         connected: false,
         tablesReady: false,
+        deleteProcedureReady: false,
+        hasServiceRoleKey: false,
         projectRef: 'qksklthfpbcwseiqpajq',
         message: '',
         error: err.message || 'Network error reaching backend.',
@@ -596,6 +608,9 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error('Delete error:', err);
       addToast(err.message || 'Failed to delete item', 'error');
+      if (err.requiresMigration || err.message?.includes('Migration Required') || err.message?.includes('delete procedure')) {
+        setShowMigrationModal(true);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -628,7 +643,13 @@ export default function AdminDashboard() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <button
-              onClick={() => setActiveTab('supabase_setup')}
+              onClick={() => {
+                if (dbStatus.connected && dbStatus.tablesReady && !dbStatus.deleteProcedureReady) {
+                  setShowMigrationModal(true);
+                } else {
+                  setActiveTab('supabase_setup');
+                }
+              }}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer"
               title="Click to check Supabase cloud connection status"
             >
@@ -636,18 +657,28 @@ export default function AdminDashboard() {
                 className={`w-2 h-2 rounded-full ${
                   dbStatus.checking
                     ? 'bg-amber-400 animate-ping'
-                    : dbStatus.connected && dbStatus.tablesReady
+                    : dbStatus.connected && dbStatus.tablesReady && dbStatus.deleteProcedureReady
                     ? 'bg-emerald-500 animate-pulse'
                     : dbStatus.connected
                     ? 'bg-amber-400'
                     : 'bg-rose-500'
                 }`}
               />
-              <span className={dbStatus.connected && dbStatus.tablesReady ? 'text-emerald-300' : dbStatus.connected ? 'text-amber-300' : 'text-rose-300'}>
+              <span
+                className={
+                  dbStatus.connected && dbStatus.tablesReady && dbStatus.deleteProcedureReady
+                    ? 'text-emerald-300'
+                    : dbStatus.connected
+                    ? 'text-amber-300'
+                    : 'text-rose-300'
+                }
+              >
                 {dbStatus.checking
                   ? 'Verifying Cloud DB...'
-                  : dbStatus.connected && dbStatus.tablesReady
+                  : dbStatus.connected && dbStatus.tablesReady && dbStatus.deleteProcedureReady
                   ? 'Connected to Supabase'
+                  : dbStatus.connected && dbStatus.tablesReady && !dbStatus.deleteProcedureReady
+                  ? 'Supabase: Delete SQL Needed'
                   : dbStatus.connected
                   ? 'Supabase: Tables Needed'
                   : 'Supabase Disconnected'}
@@ -707,6 +738,37 @@ export default function AdminDashboard() {
               >
                 View SQL Script
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Banner when Supabase is connected and tables exist, but delete procedure is not active */}
+        {dbStatus.connected && dbStatus.tablesReady && !dbStatus.deleteProcedureReady && !dbStatus.checking && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-950/40 border border-amber-500/70 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-amber-200 text-xs shadow-lg">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-white text-sm">Supabase Delete Procedure Needed</p>
+                <p className="text-amber-300/90 mt-0.5">
+                  Cloud database is connected, but the permanent delete procedure is not active in Supabase yet. Run the 10-second SQL script to allow deleting subjects, lectures, quizzes, and PDFs.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setShowMigrationModal(true)}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition-colors shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                <Terminal className="w-4 h-4" /> Activate Delete Procedure
+              </button>
+              <a
+                href="https://supabase.com/dashboard/project/qksklthfpbcwseiqpajq/sql/new"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition-colors flex items-center gap-1.5"
+              >
+                Open SQL Editor <ExternalLink className="w-3.5 h-3.5" />
+              </a>
             </div>
           </div>
         )}
@@ -1938,6 +2000,119 @@ export default function AdminDashboard() {
         fileName={previewModal.fileName}
         onClose={() => setPreviewModal({ isOpen: false, fileUrl: '', title: '', fileName: '' })}
       />
+
+      {/* Supabase SQL Migration Assistant Modal */}
+      {showMigrationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#0B1120] border border-amber-500/50 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <Terminal className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Activate Cloud Database Deletion</h3>
+                  <p className="text-xs text-slate-400">10-second setup to enable permanent deletion in Supabase</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowMigrationModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 text-xs text-amber-200 space-y-2">
+              <p className="font-semibold text-white text-sm">Why is this required?</p>
+              <p>
+                Your website is connected to Supabase project <code className="font-mono bg-slate-900 px-1.5 py-0.5 rounded text-amber-300">qksklthfpbcwseiqpajq</code>. Supabase Row Level Security blocks delete operations by default until the delete procedure is registered or the service role key is provided.
+              </p>
+            </div>
+
+            {/* Option 1: Run SQL in Supabase */}
+            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-blue-600/30 text-blue-400 text-xs font-bold border border-blue-500/30">
+                    Option 1 (Fastest — 10 seconds)
+                  </span>
+                  <span className="text-sm font-bold text-white">Execute SQL Migration</span>
+                </div>
+              </div>
+
+              <ol className="text-xs text-slate-300 space-y-2 list-decimal list-inside">
+                <li>
+                  Click <strong className="text-white">Copy Migration SQL</strong> below.
+                </li>
+                <li>
+                  Click <strong className="text-white">Open Supabase SQL Editor</strong>.
+                </li>
+                <li>
+                  Paste the script and click the green <strong className="text-emerald-400">Run</strong> button.
+                </li>
+              </ol>
+
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(MIGRATION_DELETE_SQL || SCHEMA_SQL);
+                    setCopiedMigrationSql(true);
+                    addToast('Migration SQL copied to clipboard!', 'success');
+                    setTimeout(() => setCopiedMigrationSql(false), 3000);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md cursor-pointer"
+                >
+                  {copiedMigrationSql ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copiedMigrationSql ? 'Copied to Clipboard!' : 'Copy Migration SQL'}
+                </button>
+                <a
+                  href="https://supabase.com/dashboard/project/qksklthfpbcwseiqpajq/sql/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md"
+                >
+                  Open Supabase SQL Editor <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+
+            {/* Option 2: Add Service Role Key to Vercel */}
+            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-slate-700 text-slate-300 text-xs font-bold">
+                  Option 2 (Alternative)
+                </span>
+                <span className="text-sm font-bold text-white">Add SUPABASE_SERVICE_ROLE_KEY to Vercel</span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                1. Open <a href="https://supabase.com/dashboard/project/qksklthfpbcwseiqpajq/settings/api" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">Supabase API Settings</a> and copy your <code className="text-slate-300 font-mono">service_role</code> secret key.<br />
+                2. In Vercel Project Settings $\rightarrow$ Environment Variables, add <code className="text-amber-300 font-mono">SUPABASE_SERVICE_ROLE_KEY</code> with that value and redeploy.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+              <button
+                onClick={async () => {
+                  await checkDbConnectivity();
+                  addToast('Refreshed database status check.', 'info');
+                }}
+                disabled={dbStatus.checking}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${dbStatus.checking ? 'animate-spin' : ''}`} />
+                Check Status Again
+              </button>
+              <button
+                onClick={() => setShowMigrationModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

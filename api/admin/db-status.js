@@ -75,10 +75,36 @@ export default async function handler(req, res) {
       storageReady = false;
     }
 
+    // 4. Check if Admin Delete Procedure or Service Role Key is active
+    let deleteProcedureReady = false;
+    const hasServiceRoleKey = Boolean(
+      process.env.SUPABASE_SERVICE_ROLE_KEY &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY.length > 20
+    );
+
+    if (hasServiceRoleKey) {
+      deleteProcedureReady = true;
+    } else {
+      try {
+        const { error: rpcErr } = await supabaseAdmin.rpc('admin_delete_record', {
+          p_id: '__probe_check__',
+          p_table: 'subjects',
+          p_secret: '__probe__',
+        });
+        if (!rpcErr || (rpcErr.code !== 'PGRST202' && !rpcErr.message?.includes('schema cache'))) {
+          deleteProcedureReady = true;
+        }
+      } catch {
+        deleteProcedureReady = false;
+      }
+    }
+
     return res.status(200).json({
       connected: true,
       configured: true,
       tablesReady: true,
+      deleteProcedureReady,
+      hasServiceRoleKey,
       projectRef: 'qksklthfpbcwseiqpajq',
       url: supabaseUrl,
       keyPrefix: supabaseKey ? supabaseKey.substring(0, 15) + '...' : 'none',

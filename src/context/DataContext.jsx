@@ -231,7 +231,9 @@ export function DataProvider({ children }) {
 
     const result = await res.json();
     if (!res.ok) {
-      throw new Error(result.error || `Failed to execute ${action} on ${table}`);
+      const err = new Error(result.error || `Failed to execute ${action} on ${table}`);
+      err.requiresMigration = Boolean(result.requiresMigration);
+      throw err;
     }
 
     return result.data;
