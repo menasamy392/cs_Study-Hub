@@ -21,9 +21,6 @@ import {
   AlertTriangle,
   ShieldCheck,
   ShieldAlert,
-  Lock,
-  UserCheck,
-  LogOut,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
@@ -36,7 +33,7 @@ export default function SubjectDetailsPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, studentUser, isAdmin, isStudent, loginStudent, logoutStudent } = useAuth();
+  const { user, isAdmin } = useAuth();
   const {
     subjects,
     materials,
@@ -50,13 +47,6 @@ export default function SubjectDetailsPage() {
   } = useData();
   const { t } = useLanguage();
   const { addToast } = useToast();
-
-  // Student Authentication input inside Warnings tab
-  const [studentAuthInput, setStudentAuthInput] = useState({
-    identifier: '',
-    name: '',
-  });
-  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
 
   // Active Tab: 'overview' | 'lectures' | 'sections' | 'quizzes' | 'study_notes' | 'announcements' | 'roadmap'
   const initialTab = searchParams.get('tab') || 'overview';
@@ -117,31 +107,6 @@ export default function SubjectDetailsPage() {
   const subjectWarnings = useMemo(() => {
     return warnings.filter((w) => String(w.subject_id) === String(id));
   }, [warnings, id]);
-
-  const handleStudentAuthSubmit = async (e) => {
-    e.preventDefault();
-    const rawInput = studentAuthInput.identifier.trim();
-    if (!rawInput) {
-      addToast('Please enter your Student Email or Student ID', 'error');
-      return;
-    }
-
-    try {
-      setIsAuthSubmitting(true);
-      const isEmail = rawInput.includes('@');
-      await loginStudent({
-        email: isEmail ? rawInput : `${rawInput}@csstudyhub.edu`,
-        studentId: isEmail ? '' : rawInput,
-        name: studentAuthInput.name.trim() || rawInput.split('@')[0],
-      });
-      addToast('Student identity verified!', 'success');
-      setStudentAuthInput({ identifier: '', name: '' });
-    } catch (err) {
-      addToast(err.message || 'Verification failed. Please try again.', 'error');
-    } finally {
-      setIsAuthSubmitting(false);
-    }
-  };
 
   // Selected current lecture on roadmap / overview
   const initialLectureId = searchParams.get('lectureId') || lectures[0]?.id;
@@ -826,204 +791,123 @@ export default function SubjectDetailsPage() {
         {activeTab === 'warnings' && (
           <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="p-2.5 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30">
-                  <AlertTriangle className="w-5 h-5" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-[#0B1120] border border-slate-800 shadow-xl">
+              <div className="flex items-center gap-3.5">
+                <span className="p-3 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30">
+                  <AlertTriangle className="w-6 h-6" />
                 </span>
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-white">
-                    {subject.name} Warnings
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Official PDF documents containing lists of students who received academic warnings.
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl sm:text-2xl font-bold text-white">
+                      {subject.name} Academic Warnings
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-950/80 text-rose-300 border border-rose-700/60">
+                      {subjectWarnings.length} {subjectWarnings.length === 1 ? 'Document' : 'Documents'}
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                    Official academic and attendance warning PDF documents issued for this course.
                   </p>
                 </div>
               </div>
 
-              {/* Status indicator */}
               {isAdmin && (
-                <span className="self-start sm:self-auto px-3 py-1 rounded-full text-xs font-bold bg-blue-900/60 text-blue-300 border border-blue-700/50 flex items-center gap-1.5">
-                  <ShieldAlert className="w-3.5 h-3.5" /> Admin View
-                </span>
+                <Link
+                  to="/admin"
+                  className="self-start sm:self-auto inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-950/40 transition-colors"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" /> + Manage Warnings in Admin
+                </Link>
               )}
             </div>
 
-            {/* RESTRICTED ACCESS GATE (Authorized Students & Admins Only) */}
-            {!isAdmin && !isStudent ? (
-              <div className="max-w-xl mx-auto bg-[#0B1120] border border-slate-800 rounded-3xl p-6 sm:p-10 text-center shadow-2xl">
-                <div className="w-14 h-14 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto mb-4">
-                  <Lock className="w-7 h-7" />
+            {/* Warning PDFs List (Directly accessible to all students) */}
+            {subjectWarnings.length === 0 ? (
+              <div className="p-10 sm:p-14 rounded-3xl bg-gradient-to-b from-emerald-950/20 via-[#0B1120] to-[#0B1120] border border-emerald-500/30 text-center shadow-xl">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
+                  <ShieldCheck className="w-8 h-8" />
                 </div>
-
-                <h3 className="text-xl sm:text-2xl font-bold text-white">
-                  Restricted Access — Academic Warnings
+                <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-700/60 inline-block mb-3">
+                  Clean Standing
+                </span>
+                <h3 className="text-2xl font-black text-white">
+                  No Warnings Issued
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-400 mt-2 leading-relaxed">
-                  Academic warning documents contain official university student lists. Access is restricted to authorized students and faculty.
-                  Please sign in with your <strong className="text-white">Student Email</strong> or <strong className="text-white">Student ID</strong> to view warning documents for this course.
+                <p className="text-sm text-slate-300 mt-2 max-w-md mx-auto leading-relaxed">
+                  There are currently no academic or attendance warning PDF documents issued for <strong className="text-white">{subject.name}</strong>.
                 </p>
-
-                <form onSubmit={handleStudentAuthSubmit} className="mt-6 text-left space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
-                      Student University Email or Student ID *
-                    </label>
-                    <input
-                      type="text"
-                      value={studentAuthInput.identifier}
-                      onChange={(e) => setStudentAuthInput({ ...studentAuthInput, identifier: e.target.value })}
-                      placeholder="e.g. 20240182 or ahmed@csstudyhub.edu"
-                      required
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-rose-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
-                      Student Name <span className="text-slate-500 lowercase">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={studentAuthInput.name}
-                      onChange={(e) => setStudentAuthInput({ ...studentAuthInput, name: e.target.value })}
-                      placeholder="e.g. Ahmed Hassan"
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-rose-500"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isAuthSubmitting}
-                    className="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-sm transition-all shadow-lg shadow-rose-950/40 flex items-center justify-center gap-2"
-                  >
-                    <ShieldCheck className="w-4 h-4" />
-                    {isAuthSubmitting ? 'Verifying...' : 'Verify Identity & Access Warnings'}
-                  </button>
-                </form>
               </div>
             ) : (
-              /* AUTHORIZED VIEW: DISPLAY WARNING PDF DOCUMENTS */
-              <div className="space-y-6">
-                {/* User Session Bar */}
-                <div className="p-4 sm:p-5 rounded-2xl bg-[#0B1120] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold">
-                      <UserCheck className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-white">
-                        {isAdmin
-                          ? 'Department Administrator'
-                          : `Authenticated Student: ${studentUser.name}`}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {isAdmin
-                          ? 'You have administrative access to publish and manage warning PDFs.'
-                          : `${studentUser.studentId ? `ID: ${studentUser.studentId} • ` : ''}${studentUser.email}`}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-start sm:self-auto">
-                    {isAdmin ? (
-                      <Link
-                        to="/admin"
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-950/40 transition-colors"
-                      >
-                        <AlertTriangle className="w-3.5 h-3.5" /> + Upload in Admin
-                      </Link>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          logoutStudent();
-                          addToast('Logged out of student session.', 'info');
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-slate-400 hover:text-white border border-slate-800 transition-colors"
-                      >
-                        <LogOut className="w-3.5 h-3.5" /> Switch Student / Sign Out
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Warning PDFs List */}
-                {subjectWarnings.length === 0 ? (
-                  <div className="p-10 sm:p-14 rounded-3xl bg-gradient-to-b from-emerald-950/20 via-[#0B1120] to-[#0B1120] border border-emerald-500/30 text-center shadow-xl">
-                    <div className="w-16 h-16 rounded-2xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
-                      <ShieldCheck className="w-8 h-8" />
-                    </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-700/60 inline-block mb-3">
-                      Clean Standing
-                    </span>
-                    <h3 className="text-2xl font-black text-white">
-                      No Warnings Issued
-                    </h3>
-                    <p className="text-sm text-slate-300 mt-2 max-w-md mx-auto leading-relaxed">
-                      There are currently no academic or attendance warning PDF documents issued for <strong className="text-white">{subject.name}</strong>.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {subjectWarnings.map((warn) => (
-                      <div
-                        key={warn.id}
-                        className="p-6 bg-[#0B1120] border border-slate-800 hover:border-slate-700 rounded-3xl shadow-xl transition-all flex flex-col justify-between space-y-4"
-                      >
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-950/70 text-rose-300 border border-rose-700/60">
-                              <FileText className="w-3.5 h-3.5" />
-                              Warning PDF Document
-                            </span>
-                            <span className="text-xs text-slate-500 flex items-center gap-1 font-mono">
-                              <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                              {warn.created_at ? new Date(warn.created_at).toLocaleDateString() : 'N/A'}
-                            </span>
-                          </div>
-
-                          <h3 className="text-lg font-bold text-white leading-snug">
-                            {warn.title}
-                          </h3>
-
-                          {warn.description && (
-                            <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800">
-                              <p className="text-xs text-slate-300 leading-relaxed">
-                                {warn.description}
-                              </p>
-                            </div>
-                          )}
-
-                          <div className="text-xs text-slate-500 flex items-center gap-2 font-mono">
-                            <span className="truncate">{warn.file_name || 'academic_warning_list.pdf'}</span>
-                            {warn.file_size && (
-                              <span className="px-2 py-0.5 rounded-full bg-slate-800 text-[11px] text-slate-400">
-                                {warn.file_size}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Action Buttons: View PDF & Download PDF */}
-                        <div className="pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
-                          <button
-                            onClick={() => handleView(warn)}
-                            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shadow-rose-950/40"
-                          >
-                            <Eye className="w-4 h-4" /> View PDF
-                          </button>
-
-                          <button
-                            onClick={() => handleDownload(warn)}
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition-colors"
-                          >
-                            <Download className="w-4 h-4" /> Download PDF
-                          </button>
-                        </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {subjectWarnings.map((warn) => (
+                  <div
+                    key={warn.id}
+                    className="p-6 bg-[#0B1120] border border-slate-800 hover:border-slate-700 rounded-3xl shadow-xl transition-all flex flex-col justify-between space-y-4"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-950/70 text-rose-300 border border-rose-700/60">
+                          <FileText className="w-3.5 h-3.5" />
+                          Warning PDF Document
+                        </span>
+                        <span className="text-xs text-slate-500 flex items-center gap-1 font-mono">
+                          <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                          {warn.created_at ? new Date(warn.created_at).toLocaleDateString() : 'Recent'}
+                        </span>
                       </div>
-                    ))}
+
+                      <h3 className="text-lg font-bold text-white leading-snug">
+                        {warn.title}
+                      </h3>
+
+                      {warn.description && (
+                        <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800">
+                          <p className="text-xs text-slate-300 leading-relaxed">
+                            {warn.description}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="text-xs text-slate-500 flex items-center gap-2 font-mono">
+                        <span className="truncate">{warn.file_name || 'academic_warning_list.pdf'}</span>
+                        {warn.file_size && (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-800 text-[11px] text-slate-400">
+                            {warn.file_size}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons: View PDF, Download PDF & Direct Browser Open */}
+                    <div className="pt-4 border-t border-slate-800 flex items-center gap-2 sm:gap-3">
+                      <button
+                        onClick={() => handleView(warn)}
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shadow-rose-950/40 cursor-pointer"
+                      >
+                        <Eye className="w-4 h-4" /> View PDF
+                      </button>
+
+                      <button
+                        onClick={() => handleDownload(warn)}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" /> Download PDF
+                      </button>
+
+                      {(warn.file_url || warn.external_url) && (
+                        <a
+                          href={warn.file_url || warn.external_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-colors"
+                          title="Open PDF directly in new browser tab"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             )}
           </div>
