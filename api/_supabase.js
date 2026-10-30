@@ -49,6 +49,11 @@ export function getServerSupabaseStatus() {
 
 export const isServerSupabaseConfigured = true;
 
+// Prevent RealtimeClient error in Node environments without native WebSocket
+if (typeof globalThis.WebSocket === 'undefined') {
+  globalThis.WebSocket = class WebSocket {};
+}
+
 // Create serverless client with admin secret header for RLS verification
 export const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
   auth: {

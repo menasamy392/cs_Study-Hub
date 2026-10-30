@@ -10,6 +10,7 @@ import SearchModal from './components/SearchModal';
 import ScrollToTop from './components/ScrollToTop';
 import { useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { useAnalyticsTracker } from './hooks/useAnalyticsTracker';
 
 function ProtectedRoute({ children }) {
   const { isAdmin, loading } = useAuth();
@@ -33,6 +34,9 @@ export default function App() {
   const location = useLocation();
   const isAdminDashboard = location.pathname === '/admin';
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+
+  // Initialize student website visitor analytics tracking
+  useAnalyticsTracker();
 
   // Keyboard shortcut '/' to open search modal from anywhere
   useEffect(() => {

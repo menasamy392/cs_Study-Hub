@@ -31,13 +31,15 @@ import {
   Download,
   Terminal,
   Key,
+  Activity,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useToast } from '../components/Toast';
 import ConfirmationModal from '../components/ConfirmationModal';
 import FilePreviewModal from '../components/FilePreviewModal';
-import { SCHEMA_SQL, MIGRATION_DELETE_SQL } from '../lib/schemaSql';
+import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import { SCHEMA_SQL, MIGRATION_DELETE_SQL, MIGRATION_ANALYTICS_SQL } from '../lib/schemaSql';
 
 const AVAILABLE_ICONS = [
   'BookOpen',
@@ -98,6 +100,7 @@ export default function AdminDashboard() {
     connected: false,
     tablesReady: false,
     deleteProcedureReady: false,
+    analyticsReady: false,
     hasServiceRoleKey: false,
     projectRef: 'qksklthfpbcwseiqpajq',
     message: '',
@@ -121,6 +124,7 @@ export default function AdminDashboard() {
           connected: Boolean(data.connected),
           tablesReady: Boolean(data.tablesReady),
           deleteProcedureReady: Boolean(data.deleteProcedureReady),
+          analyticsReady: Boolean(data.analyticsReady),
           hasServiceRoleKey: Boolean(data.hasServiceRoleKey),
           projectRef: data.projectRef || 'qksklthfpbcwseiqpajq',
           message: data.message || '',
@@ -134,6 +138,7 @@ export default function AdminDashboard() {
           connected: false,
           tablesReady: false,
           deleteProcedureReady: false,
+          analyticsReady: false,
           hasServiceRoleKey: false,
           projectRef: 'qksklthfpbcwseiqpajq',
           message: '',
@@ -148,6 +153,7 @@ export default function AdminDashboard() {
         connected: false,
         tablesReady: false,
         deleteProcedureReady: false,
+        analyticsReady: false,
         hasServiceRoleKey: false,
         projectRef: 'qksklthfpbcwseiqpajq',
         message: '',
@@ -845,6 +851,18 @@ export default function AdminDashboard() {
           </button>
 
           <button
+            onClick={() => setActiveTab('analytics')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors ${
+              activeTab === 'analytics'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-slate-400 hover:bg-slate-800'
+            }`}
+          >
+            <Activity className="w-4 h-4 text-emerald-400" />
+            Website Analytics
+          </button>
+
+          <button
             onClick={() => setActiveTab('supabase_setup')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors ${
               activeTab === 'supabase_setup'
@@ -1361,6 +1379,11 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* TAB: WEBSITE ANALYTICS */}
+        {activeTab === 'analytics' && (
+          <AnalyticsDashboard dbStatus={dbStatus} />
         )}
 
         {/* TAB 4: SUPABASE SETUP */}

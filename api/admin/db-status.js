@@ -99,11 +99,23 @@ export default async function handler(req, res) {
       }
     }
 
+    // 5. Check if Analytics Tables are ready
+    let analyticsReady = false;
+    try {
+      const { error: aErr } = await supabaseAdmin
+        .from('analytics_visitors')
+        .select('*', { count: 'exact', head: true });
+      analyticsReady = !aErr;
+    } catch {
+      analyticsReady = false;
+    }
+
     return res.status(200).json({
       connected: true,
       configured: true,
       tablesReady: true,
       deleteProcedureReady,
+      analyticsReady,
       hasServiceRoleKey,
       projectRef: 'qksklthfpbcwseiqpajq',
       url: supabaseUrl,
