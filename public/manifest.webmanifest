@@ -1,0 +1,19 @@
+{
+  "name": "Study Hub — University Study Platform",
+  "short_name": "Study Hub",
+  "description": "Everything you need to study, organized in one place. Lectures, practical sections, quizzes, and study roadmaps.",
+  "start_url": "/?utm_source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070B14",
+  "theme_color": "#070B14",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512 any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

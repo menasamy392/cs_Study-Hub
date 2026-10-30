@@ -7,6 +7,8 @@ import SubjectDetailsPage from './pages/SubjectDetailsPage';
 import AdminLoginPage from './pages/AdminLoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import SearchModal from './components/SearchModal';
+import AnnouncementsModal from './components/AnnouncementsModal';
+import MobileBottomNav from './components/MobileBottomNav';
 import ScrollToTop from './components/ScrollToTop';
 import { useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
@@ -34,6 +36,7 @@ export default function App() {
   const location = useLocation();
   const isAdminDashboard = location.pathname === '/admin';
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [announcementsModalOpen, setAnnouncementsModalOpen] = useState(false);
 
   // Initialize student website visitor analytics tracking
   useAnalyticsTracker();
@@ -64,7 +67,8 @@ export default function App() {
           <Navbar onOpenSearch={() => setSearchModalOpen(true)} />
         )}
 
-        <div className="flex-1">
+        {/* Page Content (With bottom padding on mobile to accommodate fixed bottom bar) */}
+        <div className="flex-1 pb-20 md:pb-0">
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/subject/:id" element={<SubjectDetailsPage />} />
@@ -84,10 +88,21 @@ export default function App() {
         {/* Global Footer (Hidden inside Admin workspace) */}
         {!isAdminDashboard && <Footer />}
 
+        {/* Mobile Fixed Bottom Navigation Bar (Hidden on Desktop & Admin) */}
+        {!isAdminDashboard && (
+          <MobileBottomNav onOpenNews={() => setAnnouncementsModalOpen(true)} />
+        )}
+
         {/* Global Search Modal */}
         <SearchModal
           isOpen={searchModalOpen}
           onClose={() => setSearchModalOpen(false)}
+        />
+
+        {/* Global Announcements Modal (Callable from anywhere) */}
+        <AnnouncementsModal
+          isOpen={announcementsModalOpen}
+          onClose={() => setAnnouncementsModalOpen(false)}
         />
       </div>
     </LanguageProvider>

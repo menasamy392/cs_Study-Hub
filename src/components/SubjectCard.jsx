@@ -105,20 +105,20 @@ export default function SubjectCard({ subject }) {
           handleOpen();
         }
       }}
-      className={`group relative flex flex-col justify-between p-6 bg-[#0B1120] border border-slate-800/90 rounded-3xl shadow-xl transition-all duration-300 hover:-translate-y-1.5 cursor-pointer ${theme.hoverBorder}`}
+      className={`group relative flex flex-col justify-between p-4 sm:p-6 bg-[#0B1120] border border-slate-800/90 rounded-2xl sm:rounded-3xl shadow-xl transition-all duration-200 active:scale-[0.98] sm:hover:-translate-y-1.5 cursor-pointer min-h-[44px] ${theme.hoverBorder}`}
     >
       <div>
         {/* Top Header */}
-        <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex items-start justify-between gap-3 mb-3 sm:mb-4">
           <div
-            className={`p-3.5 rounded-2xl border ${theme.iconBg} shadow-sm transition-transform duration-300 group-hover:scale-110`}
+            className={`p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border ${theme.iconBg} shadow-sm transition-transform duration-300 group-hover:scale-105 shrink-0`}
           >
-            <IconComponent className="w-6 h-6" />
+            <IconComponent className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
 
           {subject.code && (
             <span
-              className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider border ${theme.badge}`}
+              className={`text-[11px] sm:text-xs font-bold px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full uppercase tracking-wider border ${theme.badge} shrink-0`}
             >
               {subject.code}
             </span>
@@ -126,43 +126,43 @@ export default function SubjectCard({ subject }) {
         </div>
 
         {/* Title */}
-        <h3 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">
+        <h3 className="text-base sm:text-xl font-bold text-white group-hover:text-blue-400 transition-colors leading-snug">
           {subject.name}
         </h3>
 
         {/* Instructor info */}
         {subject.instructor && (
-          <p className="text-xs font-medium text-slate-400 mt-1 line-clamp-1">
+          <p className="text-[11px] sm:text-xs font-medium text-slate-400 mt-1 line-clamp-1">
             {subject.instructor}
           </p>
         )}
 
         {/* Description */}
-        <p className="mt-2.5 text-xs sm:text-sm text-slate-400 leading-relaxed line-clamp-2">
+        <p className="mt-2 text-xs sm:text-sm text-slate-400 leading-relaxed line-clamp-2">
           {subject.description || 'Lectures, sections, quizzes, and study roadmap.'}
         </p>
 
         {/* Metrics Grid */}
-        <div className="mt-5 grid grid-cols-3 gap-2 py-3 px-3.5 rounded-2xl bg-[#0F172A]/80 border border-slate-800/80 text-center">
+        <div className="mt-3.5 sm:mt-5 grid grid-cols-3 gap-1.5 sm:gap-2 py-2 px-2.5 sm:py-3 sm:px-3.5 rounded-xl sm:rounded-2xl bg-[#0F172A]/80 border border-slate-800/80 text-center">
           <div>
-            <span className="block text-sm font-bold text-white">{lecturesCount}</span>
-            <span className="text-[11px] text-slate-400">{t('lectures')}</span>
+            <span className="block text-xs sm:text-sm font-bold text-white">{lecturesCount}</span>
+            <span className="text-[10px] sm:text-[11px] text-slate-400">{t('lectures')}</span>
           </div>
           <div>
-            <span className="block text-sm font-bold text-white">{sectionsCount}</span>
-            <span className="text-[11px] text-slate-400">{t('sections')}</span>
+            <span className="block text-xs sm:text-sm font-bold text-white">{sectionsCount}</span>
+            <span className="text-[10px] sm:text-[11px] text-slate-400">{t('sections')}</span>
           </div>
           <div>
-            <span className="block text-sm font-bold text-white">{quizzesCount}</span>
-            <span className="text-[11px] text-slate-400">{t('quizzes')}</span>
+            <span className="block text-xs sm:text-sm font-bold text-white">{quizzesCount}</span>
+            <span className="text-[10px] sm:text-[11px] text-slate-400">{t('quizzes')}</span>
           </div>
         </div>
 
         {/* Student Progress Percentage */}
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-slate-400 font-medium">{t('progress')}</span>
-            <span className="font-bold text-white">{progress.percentage}%</span>
+        <div className="mt-3 sm:mt-4">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-slate-400 text-[11px] sm:text-xs font-medium">{t('progress')}</span>
+            <span className="font-bold text-white text-[11px] sm:text-xs">{progress.percentage}%</span>
           </div>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
             <div
@@ -174,16 +174,16 @@ export default function SubjectCard({ subject }) {
       </div>
 
       {/* Card Footer: Open Subject Action */}
-      <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between">
-        <span className="text-xs text-slate-400 font-medium">
+      <div className="mt-4 pt-3 sm:mt-6 sm:pt-4 border-t border-slate-800/80 flex items-center justify-between">
+        <span className="text-[11px] sm:text-xs text-slate-400 font-medium">
           {progress.completedCount} of {progress.totalCount} {t('completed')}
         </span>
 
         <span
-          className={`inline-flex items-center gap-1.5 text-sm font-bold transition-transform group-hover:translate-x-1 ${theme.button}`}
+          className={`inline-flex items-center gap-1 text-xs sm:text-sm font-bold transition-transform group-hover:translate-x-1 ${theme.button}`}
         >
           {t('openSubject')}
-          <ArrowRight className="w-4 h-4" />
+          <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </span>
       </div>
     </div>

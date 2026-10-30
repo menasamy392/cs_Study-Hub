@@ -55,14 +55,14 @@ export default function AnnouncementsModal({ isOpen, onClose }) {
         {/* Filters */}
         <div className="px-6 py-3 border-b border-slate-800/80 bg-slate-900/40 flex flex-wrap items-center justify-between gap-3 text-xs">
           {/* Category Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full touch-pan-x no-scrollbar">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-full font-semibold whitespace-nowrap transition-colors ${
+                className={`px-3 py-1.5 rounded-full font-semibold whitespace-nowrap transition-all active:scale-95 min-h-[36px] ${
                   selectedCategory === cat
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
                 }`}
               >
@@ -75,7 +75,7 @@ export default function AnnouncementsModal({ isOpen, onClose }) {
           <select
             value={selectedSubject}
             onChange={(e) => setSelectedSubject(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs focus:outline-none"
+            className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-base sm:text-xs focus:outline-none min-h-[36px]"
           >
             <option value="All">All Subjects</option>
             {subjects.map((s) => (

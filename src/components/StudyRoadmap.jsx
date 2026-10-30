@@ -18,32 +18,33 @@ export default function StudyRoadmap({
 
   // Find next recommended lecture to study
   const nextLecture = lectures.find((l) => !isCompleted(subject.id, l.id)) || lectures[0];
+  const minPathWidth = Math.max(540, (lectures.length + 1) * 95);
 
   return (
-    <div className="w-full bg-[#0B1120] border border-slate-800/90 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+    <div className="w-full bg-[#0B1120] border border-slate-800/90 rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl relative overflow-hidden">
       {/* Background ambient glow */}
       <div className="absolute top-0 right-1/4 w-96 h-40 bg-blue-600/10 blur-[90px] rounded-full pointer-events-none" />
 
       {/* Top Header: Progress Bar & Stats */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800/80 relative z-10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-slate-800/80 relative z-10">
         <div>
           <div className="flex items-center gap-2">
             <span className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400">
               <Sparkles className="w-4 h-4" />
             </span>
-            <h3 className="text-lg font-bold text-white tracking-tight">
+            <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
               {subject.name} {t('roadmap')}
             </h3>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Follow the connected learning path. Click any node to study or mark as complete.
+            Follow the connected learning path. Tap any node to study or review.
           </p>
         </div>
 
         {/* Completion Stat Badge & Progress bar */}
-        <div className="flex flex-col sm:items-end gap-2 shrink-0">
+        <div className="flex flex-col sm:items-end gap-1.5 sm:gap-2 shrink-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-white">
+            <span className="text-xs sm:text-sm font-bold text-white">
               {completedCount} of {totalLectures} {t('lectures')} completed
             </span>
             <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-400 border border-blue-700/50">
@@ -51,7 +52,7 @@ export default function StudyRoadmap({
             </span>
           </div>
 
-          <div className="w-48 sm:w-64 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+          <div className="w-full sm:w-64 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
             <div
               className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 rounded-full transition-all duration-500"
               style={{ width: `${progressPercent}%` }}
@@ -60,12 +61,25 @@ export default function StudyRoadmap({
         </div>
       </div>
 
+      {/* Mobile Swipe Hint */}
+      {lectures.length > 3 && (
+        <div className="flex items-center justify-between pt-2.5 sm:hidden text-[11px]">
+          <span className="text-blue-400 font-semibold flex items-center gap-1">
+            ← Swipe to view full path →
+          </span>
+          <span className="text-slate-500">Tap node to open</span>
+        </div>
+      )}
+
       {/* Zigzag Learning Path Container */}
-      <div className="mt-8 overflow-x-auto pb-6 pt-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
-        <div className="min-w-[700px] flex items-center justify-between px-6 relative">
+      <div className="mt-4 sm:mt-8 overflow-x-auto pb-6 pt-4 touch-pan-x scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+        <div
+          style={{ minWidth: `${minPathWidth}px` }}
+          className="flex items-center justify-between px-4 sm:px-6 relative"
+        >
           {/* Connected SVG zigzag wave line */}
           <svg
-            className="absolute top-1/2 left-10 right-10 -translate-y-1/2 w-[calc(100%-5rem)] h-24 pointer-events-none -z-0"
+            className="absolute top-1/2 left-8 right-8 -translate-y-1/2 w-[calc(100%-4rem)] h-20 sm:h-24 pointer-events-none -z-0"
             preserveAspectRatio="none"
           >
             <path
@@ -87,14 +101,14 @@ export default function StudyRoadmap({
             return (
               <div
                 key={lec.id}
-                className={`relative z-10 flex flex-col items-center group cursor-pointer transition-transform duration-200 ${
-                  isEven ? '-translate-y-4' : 'translate-y-5'
+                className={`relative z-10 flex flex-col items-center group cursor-pointer transition-transform duration-200 active:scale-95 ${
+                  isEven ? '-translate-y-3 sm:-translate-y-4' : 'translate-y-4 sm:translate-y-5'
                 }`}
                 onClick={() => onSelectLecture(lec)}
               >
                 {/* Step Circle Node */}
                 <div
-                  className={`relative w-14 h-14 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${
+                  className={`relative w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-all duration-300 ${
                     isCurrent
                       ? 'bg-amber-500 text-slate-950 ring-4 ring-amber-400/40 shadow-lg shadow-amber-500/50 scale-110 animate-pulse'
                       : isDone
@@ -103,7 +117,7 @@ export default function StudyRoadmap({
                   }`}
                 >
                   {isDone ? (
-                    <Check className="w-6 h-6 stroke-[3]" />
+                    <Check className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
                   ) : (
                     <span>{lec.number || idx + 1}</span>
                   )}
@@ -115,9 +129,9 @@ export default function StudyRoadmap({
                 </div>
 
                 {/* Node Label Underneath */}
-                <div className="mt-2.5 max-w-[100px] text-center">
+                <div className="mt-2 sm:mt-2.5 max-w-[85px] sm:max-w-[100px] text-center">
                   <p
-                    className={`text-xs font-semibold leading-tight line-clamp-2 transition-colors ${
+                    className={`text-[11px] sm:text-xs font-semibold leading-tight line-clamp-2 transition-colors ${
                       isCurrent
                         ? 'text-amber-300 font-bold'
                         : isDone
@@ -135,20 +149,20 @@ export default function StudyRoadmap({
           {/* Final Star Node: Revision */}
           <div
             className={`relative z-10 flex flex-col items-center ${
-              lectures.length % 2 === 0 ? '-translate-y-4' : 'translate-y-5'
+              lectures.length % 2 === 0 ? '-translate-y-3 sm:-translate-y-4' : 'translate-y-4 sm:translate-y-5'
             }`}
           >
             <div
-              className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-sm ${
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm ${
                 progressPercent === 100
                   ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/50'
                   : 'bg-[#0F172A] text-blue-400 border-2 border-blue-500/40'
               }`}
             >
-              <Star className="w-6 h-6 fill-current" />
+              <Star className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
             </div>
-            <div className="mt-2.5 text-center">
-              <span className="text-xs font-bold text-slate-400">Revision</span>
+            <div className="mt-2 sm:mt-2.5 text-center">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-400">Revision</span>
             </div>
           </div>
         </div>

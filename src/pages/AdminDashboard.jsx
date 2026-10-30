@@ -800,11 +800,11 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-slate-800 pb-4 overflow-x-auto no-scrollbar">
+        {/* Navigation Tabs - Swipe-friendly on mobile */}
+        <div className="flex items-center gap-2 border-b border-slate-800 pb-4 overflow-x-auto no-scrollbar touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
           <button
             onClick={() => setActiveTab('materials')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 min-h-[44px] active:scale-95 ${
               activeTab === 'materials'
                 ? 'bg-blue-600 text-white shadow-md'
                 : 'text-slate-400 hover:bg-slate-800'
@@ -816,7 +816,7 @@ export default function AdminDashboard() {
 
           <button
             onClick={() => setActiveTab('subjects')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 min-h-[44px] active:scale-95 ${
               activeTab === 'subjects'
                 ? 'bg-blue-600 text-white shadow-md'
                 : 'text-slate-400 hover:bg-slate-800'
@@ -828,7 +828,7 @@ export default function AdminDashboard() {
 
           <button
             onClick={() => setActiveTab('announcements')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 min-h-[44px] active:scale-95 ${
               activeTab === 'announcements'
                 ? 'bg-blue-600 text-white shadow-md'
                 : 'text-slate-400 hover:bg-slate-800'
@@ -840,7 +840,7 @@ export default function AdminDashboard() {
 
           <button
             onClick={() => setActiveTab('warnings')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 min-h-[44px] active:scale-95 ${
               activeTab === 'warnings'
                 ? 'bg-rose-600 text-white shadow-md'
                 : 'text-slate-400 hover:bg-slate-800'
@@ -852,7 +852,7 @@ export default function AdminDashboard() {
 
           <button
             onClick={() => setActiveTab('analytics')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 min-h-[44px] active:scale-95 ${
               activeTab === 'analytics'
                 ? 'bg-blue-600 text-white shadow-md'
                 : 'text-slate-400 hover:bg-slate-800'
@@ -864,7 +864,7 @@ export default function AdminDashboard() {
 
           <button
             onClick={() => setActiveTab('supabase_setup')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 min-h-[44px] active:scale-95 ${
               activeTab === 'supabase_setup'
                 ? 'bg-blue-600 text-white shadow-md'
                 : 'text-slate-400 hover:bg-slate-800'
@@ -927,12 +927,12 @@ export default function AdminDashboard() {
                 value={searchMaterial}
                 onChange={(e) => setSearchMaterial(e.target.value)}
                 placeholder="Filter by title..."
-                className="w-full px-4 py-2.5 rounded-xl bg-[#0B1120] border border-slate-800 text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2.5 rounded-xl bg-[#0B1120] border border-slate-800 text-base sm:text-sm text-white focus:outline-none focus:border-blue-500"
               />
               <select
                 value={selectedSubjectFilter}
                 onChange={(e) => setSelectedSubjectFilter(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-[#0B1120] border border-slate-800 text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2.5 rounded-xl bg-[#0B1120] border border-slate-800 text-base sm:text-sm text-white focus:outline-none focus:border-blue-500"
               >
                 <option value="all">All Subjects</option>
                 {subjects.map((s) => (
@@ -942,7 +942,7 @@ export default function AdminDashboard() {
               <select
                 value={selectedTypeFilter}
                 onChange={(e) => setSelectedTypeFilter(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-[#0B1120] border border-slate-800 text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2.5 rounded-xl bg-[#0B1120] border border-slate-800 text-base sm:text-sm text-white focus:outline-none focus:border-blue-500"
               >
                 <option value="all">All Types</option>
                 <option value="lecture">Lectures</option>
@@ -953,8 +953,8 @@ export default function AdminDashboard() {
             </div>
 
             {/* Table */}
-            <div className="bg-[#0B1120] rounded-3xl border border-slate-800 overflow-hidden">
-              <div className="overflow-x-auto">
+            <div className="bg-[#0B1120] rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
+              <div className="overflow-x-auto touch-pan-x">
                 <table className="w-full text-left text-xs sm:text-sm">
                   <thead className="bg-[#0F172A] border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                     <tr>
@@ -1222,14 +1222,14 @@ export default function AdminDashboard() {
                   value={warningSearch}
                   onChange={(e) => setWarningSearch(e.target.value)}
                   placeholder="Search warnings by title, description or file name..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0B1120] border border-slate-800 text-xs sm:text-sm text-white focus:outline-none focus:border-rose-500"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0B1120] border border-slate-800 text-base sm:text-sm text-white focus:outline-none focus:border-rose-500"
                 />
               </div>
 
               <select
                 value={warningSubjectFilter}
                 onChange={(e) => setWarningSubjectFilter(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-[#0B1120] border border-slate-800 text-xs sm:text-sm text-white focus:outline-none focus:border-rose-500"
+                className="w-full px-4 py-2.5 rounded-xl bg-[#0B1120] border border-slate-800 text-base sm:text-sm text-white focus:outline-none focus:border-rose-500"
               >
                 <option value="all">All Subjects</option>
                 {subjects.map((s) => (
@@ -1240,7 +1240,7 @@ export default function AdminDashboard() {
 
             {/* Warnings Table */}
             <div className="bg-[#0B1120] rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto touch-pan-x">
                 <table className="w-full text-left text-xs sm:text-sm">
                   <thead className="bg-[#0F172A] border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                     <tr>
@@ -1586,7 +1586,7 @@ export default function AdminDashboard() {
       {/* Subject Modal */}
       {subjectModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#0B1120] border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl">
+          <div className="bg-[#0B1120] border border-slate-800 rounded-3xl p-5 sm:p-8 max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-white mb-4">
               {editingSubject ? 'Edit Subject' : 'Add New Subject'}
             </h3>
@@ -1599,7 +1599,7 @@ export default function AdminDashboard() {
                   onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })}
                   placeholder="e.g. Compiler Design"
                   required
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -1610,7 +1610,7 @@ export default function AdminDashboard() {
                   value={subjectForm.code}
                   onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })}
                   placeholder="e.g. CS321"
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -1621,7 +1621,7 @@ export default function AdminDashboard() {
                   value={subjectForm.instructor}
                   onChange={(e) => setSubjectForm({ ...subjectForm, instructor: e.target.value })}
                   placeholder="e.g. Dr. Lamiaa Hassaan"
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -1631,22 +1631,22 @@ export default function AdminDashboard() {
                   rows={3}
                   value={subjectForm.description}
                   onChange={(e) => setSubjectForm({ ...subjectForm, description: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm focus:outline-none focus:border-blue-500 resize-none"
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setSubjectModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 active:scale-95 transition-all min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg transition-all active:scale-95 min-h-[44px]"
                 >
                   Save Subject
                 </button>
@@ -1659,7 +1659,7 @@ export default function AdminDashboard() {
       {/* Material Modal */}
       {materialModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
-          <div className="bg-[#0B1120] border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl my-8">
+          <div className="bg-[#0B1120] border border-slate-800 rounded-3xl p-5 sm:p-8 max-w-xl w-full shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-white mb-4">
               {editingMaterial ? 'Edit Material' : 'Add Material'}
             </h3>
@@ -1669,7 +1669,7 @@ export default function AdminDashboard() {
                 <select
                   value={materialForm.subject_id}
                   onChange={(e) => setMaterialForm({ ...materialForm, subject_id: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm focus:outline-none focus:border-blue-500"
                 >
                   {subjects.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
@@ -1683,7 +1683,7 @@ export default function AdminDashboard() {
                   <select
                     value={materialForm.type}
                     onChange={(e) => setMaterialForm({ ...materialForm, type: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm"
                   >
                     <option value="lecture">Lecture</option>
                     <option value="section">Section</option>
@@ -1698,7 +1698,7 @@ export default function AdminDashboard() {
                     min="1"
                     value={materialForm.number}
                     onChange={(e) => setMaterialForm({ ...materialForm, number: parseInt(e.target.value) || 1 })}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm"
                   />
                 </div>
               </div>
@@ -1710,7 +1710,7 @@ export default function AdminDashboard() {
                   value={materialForm.title}
                   onChange={(e) => setMaterialForm({ ...materialForm, title: e.target.value })}
                   required
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm"
                 />
               </div>
 
@@ -1736,22 +1736,22 @@ export default function AdminDashboard() {
                   value={materialForm.external_url}
                   onChange={(e) => setMaterialForm({ ...materialForm, external_url: e.target.value })}
                   placeholder="https://..."
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm"
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setMaterialModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 active:scale-95 transition-all min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg transition-all active:scale-95 min-h-[44px]"
                 >
                   Save Material
                 </button>
@@ -1764,7 +1764,7 @@ export default function AdminDashboard() {
       {/* Announcement Modal */}
       {announcementModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#0B1120] border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl">
+          <div className="bg-[#0B1120] border border-slate-800 rounded-3xl p-5 sm:p-8 max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-white mb-4">
               {editingAnnouncement ? 'Edit Announcement' : 'Publish Announcement'}
             </h3>
@@ -1774,7 +1774,7 @@ export default function AdminDashboard() {
                 <select
                   value={announcementForm.subject_id}
                   onChange={(e) => setAnnouncementForm({ ...announcementForm, subject_id: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm"
                 >
                   {subjects.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
@@ -1787,7 +1787,7 @@ export default function AdminDashboard() {
                 <select
                   value={announcementForm.category}
                   onChange={(e) => setAnnouncementForm({ ...announcementForm, category: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm"
                 >
                   {ANNOUNCEMENT_CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>{cat}</option>
@@ -1803,7 +1803,7 @@ export default function AdminDashboard() {
                   onChange={(e) => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
                   placeholder="e.g. Midterm exam topics announced"
                   required
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm"
                 />
               </div>
 
@@ -1814,7 +1814,7 @@ export default function AdminDashboard() {
                   value={announcementForm.description}
                   onChange={(e) => setAnnouncementForm({ ...announcementForm, description: e.target.value })}
                   placeholder="Details of the announcement..."
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm resize-none"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm resize-none"
                 />
               </div>
 
@@ -1831,18 +1831,18 @@ export default function AdminDashboard() {
                 </label>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setAnnouncementModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 active:scale-95 transition-all min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg transition-all active:scale-95 min-h-[44px]"
                 >
                   Publish Announcement
                 </button>
@@ -1855,7 +1855,7 @@ export default function AdminDashboard() {
       {/* Warning PDF Document Modal */}
       {warningModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in overflow-y-auto">
-          <div className="bg-[#0B1120] border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl my-8">
+          <div className="bg-[#0B1120] border border-slate-800 rounded-3xl p-5 sm:p-8 max-w-lg w-full shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2.5 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30">
                 <FileText className="w-5 h-5" />
@@ -1884,7 +1884,7 @@ export default function AdminDashboard() {
                   onChange={(e) => setWarningForm({ ...warningForm, title: e.target.value })}
                   placeholder="e.g. Midterm Attendance Warning List #1"
                   required
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-rose-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm focus:outline-none focus:border-rose-500"
                 />
               </div>
 
@@ -1897,7 +1897,7 @@ export default function AdminDashboard() {
                   value={warningForm.subject_id}
                   onChange={(e) => setWarningForm({ ...warningForm, subject_id: e.target.value })}
                   required
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-rose-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm focus:outline-none focus:border-rose-500"
                 >
                   {subjects.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
@@ -1915,7 +1915,7 @@ export default function AdminDashboard() {
                   value={warningForm.description}
                   onChange={(e) => setWarningForm({ ...warningForm, description: e.target.value })}
                   placeholder="Official notice regarding cumulative unexcused absences and coursework requirements..."
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm resize-none focus:outline-none focus:border-rose-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm resize-none focus:outline-none focus:border-rose-500"
                 />
               </div>
 
@@ -1949,7 +1949,7 @@ export default function AdminDashboard() {
                       setWarningForm({ ...warningForm, file_name: e.target.files[0].name });
                     }
                   }}
-                  className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-rose-600 file:text-white hover:file:bg-rose-500 cursor-pointer"
+                  className="w-full text-xs text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-rose-600 file:text-white hover:file:bg-rose-500 cursor-pointer min-h-[44px]"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">
                   Upload a PDF document. You can replace the existing file at any time.
@@ -1966,23 +1966,23 @@ export default function AdminDashboard() {
                   value={warningForm.external_url}
                   onChange={(e) => setWarningForm({ ...warningForm, external_url: e.target.value })}
                   placeholder="https://drive.google.com/..."
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-rose-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm focus:outline-none focus:border-rose-500"
                 />
               </div>
 
               {/* Actions */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setWarningModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-4 py-2.5 text-xs sm:text-sm font-bold text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 active:scale-95 transition-all min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving || isUploadingWarning}
-                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-950/40 transition-colors flex items-center gap-2"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-rose-950/40 transition-all active:scale-95 flex items-center gap-2 min-h-[44px]"
                 >
                   <FileText className="w-4 h-4" />
                   {isUploadingWarning ? 'Uploading PDF...' : isSaving ? 'Saving...' : 'Save Warning PDF'}

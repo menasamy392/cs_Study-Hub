@@ -307,49 +307,45 @@ export default function SubjectDetailsPage() {
             </div>
 
             {/* Top Right Stats Counters (Matching Reference Screenshot!) */}
-            <div className="flex items-center gap-6 sm:gap-8 bg-[#0F172A]/80 p-4 sm:p-5 rounded-2xl border border-slate-800/80 shrink-0 self-start lg:self-auto">
-              <div className="text-center">
-                <span className="block text-2xl font-black text-white">
+            <div className="w-full lg:w-auto grid grid-cols-3 items-center divide-x divide-slate-800 bg-[#0F172A]/80 p-3.5 sm:p-5 rounded-2xl border border-slate-800/80 shrink-0">
+              <div className="text-center px-2">
+                <span className="block text-xl sm:text-2xl font-black text-white">
                   {progress.completedCount}/{progress.totalCount}
                 </span>
-                <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                <span className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
                   lectures read
                 </span>
               </div>
 
-              <div className="w-px h-8 bg-slate-800" />
-
-              <div className="text-center">
-                <span className="block text-2xl font-black text-white">
+              <div className="text-center px-2">
+                <span className="block text-xl sm:text-2xl font-black text-white">
                   {subjectMaterials.length}
                 </span>
-                <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                <span className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
                   materials
                 </span>
               </div>
 
-              <div className="w-px h-8 bg-slate-800" />
-
-              <div className="text-center">
-                <span className="block text-2xl font-black text-blue-400">
+              <div className="text-center px-2">
+                <span className="block text-xl sm:text-2xl font-black text-blue-400">
                   {progress.percentage}%
                 </span>
-                <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                <span className="text-[10px] sm:text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
                   progress
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Navigation Pill Tabs */}
-          <div className="mt-8 flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-slate-800/80">
+          {/* Navigation Pill Tabs - Swipe-friendly on mobile */}
+          <div className="mt-8 flex items-center gap-2 overflow-x-auto pb-2.5 no-scrollbar border-b border-slate-800/80 touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
             {tabList.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 min-h-[44px] active:scale-95 ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
@@ -465,9 +461,9 @@ export default function SubjectDetailsPage() {
                       </span>
                       <button
                         onClick={() => handleView(currentLecture)}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-colors shadow-md"
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md min-h-[44px]"
                       >
-                        <Eye className="w-3.5 h-3.5" />
+                        <Eye className="w-4 h-4" />
                         Start →
                       </button>
                     </div>
@@ -490,17 +486,17 @@ export default function SubjectDetailsPage() {
                     <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between gap-2">
                       <button
                         onClick={() => handleDownload(currentLecture)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition-colors"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-300 rounded-xl text-xs sm:text-sm font-bold border border-slate-700 transition-all min-h-[44px]"
                       >
-                        <Download className="w-3.5 h-3.5" />
+                        <Download className="w-4 h-4" />
                         Download
                       </button>
 
                       <button
                         onClick={() => handleView(currentLecture)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-colors"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold transition-all min-h-[44px]"
                       >
-                        <Eye className="w-3.5 h-3.5" />
+                        <Eye className="w-4 h-4" />
                         Preview
                       </button>
                     </div>
@@ -531,7 +527,7 @@ export default function SubjectDetailsPage() {
                           href={quizzes[0].external_url || '#'}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-extrabold rounded-xl text-xs transition-colors shadow-md"
+                          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-slate-950 font-extrabold rounded-xl text-xs sm:text-sm transition-all shadow-md min-h-[44px]"
                         >
                           Start Quiz →
                         </a>
@@ -558,21 +554,21 @@ export default function SubjectDetailsPage() {
                 return (
                   <div
                     key={lec.id}
-                    className={`p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                    className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
                       isDone
                         ? 'bg-slate-900/40 border-emerald-500/30'
                         : 'bg-[#0B1120] border-slate-800 hover:border-slate-700'
                     }`}
                   >
-                    <div className="flex items-start gap-4 min-w-0">
+                    <div className="flex items-start gap-3.5 sm:gap-4 min-w-0">
                       <div
-                        className={`p-3 rounded-xl shrink-0 ${
+                        className={`p-2.5 sm:p-3 rounded-xl shrink-0 ${
                           isDone
                             ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
                             : 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
                         }`}
                       >
-                        {isDone ? <CheckCircle2 className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+                        {isDone ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> : <FileText className="w-5 h-5 sm:w-6 sm:h-6" />}
                       </div>
 
                       <div className="min-w-0">
@@ -603,24 +599,24 @@ export default function SubjectDetailsPage() {
                     </div>
 
                     {/* Actions: View, Download, Mark Completed */}
-                    <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-800">
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-0 border-slate-800">
                       <button
                         onClick={() => handleView(lec)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-colors"
+                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold transition-all min-h-[44px]"
                       >
-                        <Eye className="w-3.5 h-3.5" /> View
+                        <Eye className="w-4 h-4" /> View
                       </button>
 
                       <button
                         onClick={() => handleDownload(lec)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition-colors"
+                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-300 rounded-xl text-xs sm:text-sm font-bold border border-slate-700 transition-all min-h-[44px]"
                       >
-                        <Download className="w-3.5 h-3.5" /> Download
+                        <Download className="w-4 h-4" /> Download
                       </button>
 
                       <button
                         onClick={() => handleToggleCompleted(lec.id)}
-                        className={`p-2 rounded-xl border text-xs transition-colors ${
+                        className={`min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-xl border text-xs active:scale-95 transition-all ${
                           isDone
                             ? 'bg-emerald-600 text-white border-emerald-500'
                             : 'bg-slate-900 text-slate-400 hover:text-white border-slate-800'
@@ -652,11 +648,11 @@ export default function SubjectDetailsPage() {
                 {sections.map((sec) => (
                   <div
                     key={sec.id}
-                    className="p-5 rounded-2xl bg-[#0B1120] border border-slate-800 hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    className="p-4 sm:p-5 rounded-2xl bg-[#0B1120] border border-slate-800 hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
-                    <div className="flex items-start gap-4 min-w-0">
-                      <div className="p-3 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shrink-0">
-                        <Layers className="w-6 h-6" />
+                    <div className="flex items-start gap-3.5 sm:gap-4 min-w-0">
+                      <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                        <Layers className="w-5 h-5 sm:w-6 sm:h-6" />
                       </div>
                       <div className="min-w-0">
                         <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide">
@@ -673,19 +669,19 @@ export default function SubjectDetailsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-0 border-slate-800">
                       <button
                         onClick={() => handleView(sec)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors"
+                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold transition-all min-h-[44px]"
                       >
-                        <Eye className="w-3.5 h-3.5" /> View
+                        <Eye className="w-4 h-4" /> View
                       </button>
 
                       <button
                         onClick={() => handleDownload(sec)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition-colors"
+                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-300 rounded-xl text-xs sm:text-sm font-bold border border-slate-700 transition-all min-h-[44px]"
                       >
-                        <Download className="w-3.5 h-3.5" /> Download
+                        <Download className="w-4 h-4" /> Download
                       </button>
                     </div>
                   </div>
@@ -728,7 +724,7 @@ export default function SubjectDetailsPage() {
                         href={q.external_url || '#'}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-colors"
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold transition-all min-h-[44px]"
                       >
                         Open Quiz Form <ExternalLink className="w-3.5 h-3.5" />
                       </a>
@@ -773,7 +769,7 @@ export default function SubjectDetailsPage() {
                       </span>
                       <button
                         onClick={() => handleView(note)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold"
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold min-h-[44px]"
                       >
                         <Eye className="w-3.5 h-3.5" /> Open
                       </button>
@@ -882,14 +878,14 @@ export default function SubjectDetailsPage() {
                     <div className="pt-4 border-t border-slate-800 flex items-center gap-2 sm:gap-3">
                       <button
                         onClick={() => handleView(warn)}
-                        className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shadow-rose-950/40 cursor-pointer"
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-lg shadow-rose-950/40 cursor-pointer min-h-[44px]"
                       >
                         <Eye className="w-4 h-4" /> View PDF
                       </button>
 
                       <button
                         onClick={() => handleDownload(warn)}
-                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-300 hover:text-white rounded-xl text-xs sm:text-sm font-bold border border-slate-700 transition-all cursor-pointer min-h-[44px]"
                       >
                         <Download className="w-4 h-4" /> Download PDF
                       </button>
@@ -899,7 +895,7 @@ export default function SubjectDetailsPage() {
                           href={warn.file_url || warn.external_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-colors"
+                          className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-400 hover:text-white border border-slate-700 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Open PDF directly in new browser tab"
                         >
                           <ExternalLink className="w-4 h-4" />

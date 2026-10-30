@@ -129,41 +129,41 @@ export default function FilePreviewModal({
   const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fade-in">
       <div
-        className={`bg-[#0B1120] border border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
-          isFullScreen ? 'w-full h-full rounded-none' : 'w-full max-w-5xl h-[88vh]'
+        className={`bg-[#0B1120] border-0 sm:border border-slate-800 rounded-none sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
+          isFullScreen ? 'w-full h-full rounded-none' : 'w-full max-w-5xl h-full sm:h-[88vh]'
         }`}
         role="dialog"
         aria-modal="true"
       >
         {/* Modal Top Header Bar */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-800 bg-[#0F172A]/90">
-          <div className="flex items-center gap-3 min-w-0 pr-3">
+        <div className="flex items-center justify-between px-3 sm:px-6 py-3 border-b border-slate-800 bg-[#0F172A]/90 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2">
             <div className="p-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 shrink-0">
               {mediaType === 'image' ? (
-                <ImageIcon className="w-5 h-5" />
+                <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" />
               ) : mediaType === 'youtube' || mediaType === 'video' ? (
-                <Play className="w-5 h-5 fill-current" />
+                <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
               ) : (
-                <FileText className="w-5 h-5" />
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
               )}
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-bold text-white truncate">
+              <h2 className="text-sm sm:text-lg font-bold text-white truncate">
                 {title}
               </h2>
-              <p className="text-xs text-slate-400 truncate">{fileName}</p>
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate">{fileName}</p>
             </div>
           </div>
 
           {/* Modal Header Controls */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* View Mode Toggle for Remote PDFs */}
             {mediaType === 'pdf' && !fileUrl.startsWith('data:') && !fileUrl.startsWith('blob:') && (
               <button
                 onClick={() => setViewMode((prev) => (prev === 'direct' ? 'google' : 'direct'))}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-xl transition-all"
+                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-xl transition-all"
                 title="Switch between Native preview & Google Docs Reader"
               >
                 <RotateCw className="w-3.5 h-3.5 text-blue-400" />
@@ -175,8 +175,8 @@ export default function FilePreviewModal({
             <button
               onClick={handleDownload}
               disabled={isDownloading}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-sm transition-all disabled:opacity-50"
-              title="Download file to computer"
+              className="flex items-center justify-center gap-1.5 px-3 sm:px-3.5 py-2 text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 rounded-xl shadow-sm transition-all disabled:opacity-50 min-h-[40px] sm:min-h-[36px]"
+              title="Download file to device"
             >
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">
@@ -189,16 +189,16 @@ export default function FilePreviewModal({
               href={fileUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+              className="p-2 sm:p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 rounded-xl transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
               title="Open direct file link in new tab"
             >
               <ExternalLink className="w-4 h-4" />
             </a>
 
-            {/* Fullscreen Toggle */}
+            {/* Fullscreen Toggle - Visible on mobile & desktop! */}
             <button
               onClick={() => setIsFullScreen(!isFullScreen)}
-              className="hidden sm:inline-flex p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+              className="p-2 sm:p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 rounded-xl transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
               title={isFullScreen ? 'Exit fullscreen' : 'Fullscreen'}
             >
               {isFullScreen ? (
@@ -211,7 +211,7 @@ export default function FilePreviewModal({
             {/* Close */}
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+              className="p-2 sm:p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 rounded-xl transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
               title="Close preview"
             >
               <X className="w-5 h-5" />
@@ -271,15 +271,37 @@ export default function FilePreviewModal({
                 className="w-full h-full border-0 bg-slate-900"
               />
 
-              {/* Mobile helper ribbon */}
-              <div className="sm:hidden absolute bottom-0 inset-x-0 px-4 py-2 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                <span>Direct PDF viewer active</span>
-                <button
-                  onClick={handleDownload}
-                  className="text-blue-400 font-semibold flex items-center gap-1"
-                >
-                  <Download className="w-3.5 h-3.5" /> Download
-                </button>
+              {/* Mobile helper ribbon with Safe Area padding */}
+              <div className="sm:hidden absolute bottom-0 inset-x-0 px-3.5 py-2.5 bg-[#0F172A]/95 backdrop-blur-md border-t border-slate-800 flex items-center justify-between text-xs text-slate-300 pb-[max(env(safe-area-inset-bottom,0px),0.625rem)]">
+                {!fileUrl.startsWith('data:') && !fileUrl.startsWith('blob:') ? (
+                  <button
+                    onClick={() => setViewMode((prev) => (prev === 'direct' ? 'google' : 'direct'))}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 font-medium active:scale-95 text-[11px]"
+                  >
+                    <RotateCw className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{viewMode === 'direct' ? 'Google View' : 'Native'}</span>
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-slate-400 font-mono">PDF Loaded</span>
+                )}
+                <div className="flex items-center gap-2">
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 font-medium active:scale-95 text-[11px]"
+                  >
+                    <ExternalLink className="w-3 h-3 text-slate-400" />
+                    <span>Open</span>
+                  </a>
+                  <button
+                    onClick={handleDownload}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold active:scale-95 text-[11px] shadow-sm"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Download</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -27,27 +27,27 @@ export default function ConfirmationModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
       <div
-        className="bg-[#0B1120] border border-slate-800 rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl transition-all"
+        className="bg-[#0B1120] border border-slate-800 rounded-3xl p-5 sm:p-7 max-w-lg w-full shadow-2xl transition-all max-h-[90vh] overflow-y-auto"
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-3.5 sm:gap-4">
           <div
-            className={`p-3.5 rounded-2xl shrink-0 ${
+            className={`p-3 sm:p-3.5 rounded-2xl shrink-0 ${
               confirmVariant === 'danger'
                 ? 'bg-rose-950/50 text-rose-400 border border-rose-800/60 shadow-lg shadow-rose-950/30'
                 : 'bg-amber-950/50 text-amber-400 border border-amber-800/60'
             }`}
           >
-            <AlertTriangle className="w-6 h-6" />
+            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
 
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-bold text-white tracking-tight">
+            <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
               {title}
             </h3>
 
-            <p className="mt-2 text-xs sm:text-sm text-slate-300 leading-relaxed">
+            <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-slate-300 leading-relaxed">
               {message}
             </p>
 
@@ -60,8 +60,8 @@ export default function ConfirmationModal({
                 <ul className="space-y-1 text-slate-300">
                   {details.map((item, idx) => (
                     <li key={idx} className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                      <span>{item}</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                      <span className="truncate">{item}</span>
                     </li>
                   ))}
                 </ul>
@@ -72,7 +72,7 @@ export default function ConfirmationModal({
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors shrink-0"
+            className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-colors shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
@@ -80,12 +80,12 @@ export default function ConfirmationModal({
         </div>
 
         {/* Footer actions */}
-        <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-end gap-3">
+        <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-end gap-2.5 sm:gap-3">
           <button
             type="button"
             onClick={onCancel}
             disabled={isLoading}
-            className="px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition-colors"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-800/80 active:scale-95 rounded-xl transition-all min-h-[44px]"
           >
             Cancel
           </button>
@@ -94,7 +94,7 @@ export default function ConfirmationModal({
             type="button"
             onClick={onConfirm}
             disabled={isLoading}
-            className={`px-5 py-2.5 text-xs sm:text-sm font-bold text-white rounded-xl shadow-lg transition-all flex items-center gap-2 ${
+            className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-bold text-white rounded-xl shadow-lg transition-all active:scale-95 min-h-[44px] ${
               confirmVariant === 'danger'
                 ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/25 disabled:bg-rose-800'
                 : 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/25 disabled:bg-amber-800'
