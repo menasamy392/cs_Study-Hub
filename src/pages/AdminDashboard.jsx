@@ -32,6 +32,7 @@ import {
   Terminal,
   Key,
   Activity,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
@@ -80,6 +81,8 @@ export default function AdminDashboard() {
     addMaterial,
     updateMaterial,
     deleteMaterial,
+    safeReplaceSectionPdf,
+    safeDeleteSectionPdf,
     addAnnouncement,
     updateAnnouncement,
     deleteAnnouncement,
@@ -228,6 +231,16 @@ export default function AdminDashboard() {
   const [selectedSolutionFile, setSelectedSolutionFile] = useState(null);
   const [isUploadingSheet, setIsUploadingSheet] = useState(false);
   const [isUploadingSolution, setIsUploadingSolution] = useState(false);
+  const [isReplacingSheet, setIsReplacingSheet] = useState(false);
+  const [isReplacingSolution, setIsReplacingSolution] = useState(false);
+  const [isDeletingPdf, setIsDeletingPdf] = useState(false);
+  const [deletePdfConfirm, setDeletePdfConfirm] = useState({
+    isOpen: false,
+    field: '',
+    title: '',
+    fileName: '',
+    materialId: null,
+  });
   const sheetFileInputRef = useRef(null);
   const solutionFileInputRef = useRef(null);
 
@@ -357,18 +370,186 @@ export default function AdminDashboard() {
     }
   };
 
-  // Helper for admin PDF preview
+  // Helper for admin PDF preview (always cache-busted for real-time accuracy)
   const handleViewAdminPdf = (url, title, fileName) => {
     if (!url) {
       addToast('No PDF attached to view', 'error');
       return;
     }
+    let cacheBustedUrl = url;
+    if (!cacheBustedUrl.includes('?v=') && !cacheBustedUrl.includes('&v=')) {
+      cacheBustedUrl = cacheBustedUrl.includes('?')
+        ? `${cacheBustedUrl}&v=${Date.now()}`
+        : `${cacheBustedUrl}?v=${Date.now()}`;
+    }
     setPreviewModal({
       isOpen: true,
-      fileUrl: url,
+      fileUrl: cacheBustedUrl,
       title: title || 'PDF Document Preview',
       fileName: fileName || 'document.pdf',
     });
+  };
+
+  // Section Sheet PDF Handlers (Safe Replacement & Deletion)
+  const handleTriggerReplaceSheet = () => {
+    if (sheetFileInputRef.current) {
+      sheetFileInputRef.current.value = null;
+      sheetFileInputRef.current.click();
+    }
+  };
+
+  const handleSheetFileSelected = async (file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      addToast('Please select a valid PDF file (.pdf)', 'error');
+      return;
+    }
+
+    if (editingMaterial && editingMaterial.id) {
+      try {
+        setIsReplacingSheet(true);
+        addToast('Uploading and replacing Sheet PDF in database...', 'info');
+        const updated = await safeReplaceSectionPdf(
+          editingMaterial.id,
+          'sheet',
+          file,
+          materialForm.sheet_pdf_url || editingMaterial.sheet_pdf_url || editingMaterial.file_url
+        );
+
+        setMaterialForm((prev) => ({
+          ...prev,
+          sheet_pdf_url: updated.sheet_pdf_url,
+          sheet_file_name: updated.sheet_file_name,
+          sheet_file_size: updated.sheet_file_size,
+          file_url: updated.sheet_pdf_url,
+          file_name: updated.sheet_file_name,
+          file_size: updated.sheet_file_size,
+        }));
+        setSelectedSheetFile(null);
+        addToast('Sheet PDF replaced and saved to database successfully!', 'success');
+      } catch (err) {
+        addToast(err.message || 'Failed to replace Sheet PDF', 'error');
+      } finally {
+        setIsReplacingSheet(false);
+        if (sheetFileInputRef.current) sheetFileInputRef.current.value = null;
+      }
+    } else {
+      setSelectedSheetFile(file);
+      setMaterialForm((prev) => ({
+        ...prev,
+        sheet_file_name: file.name,
+        sheet_file_size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+      }));
+    }
+  };
+
+  // Section Solution PDF Handlers (Safe Replacement & Deletion)
+  const handleTriggerReplaceSolution = () => {
+    if (solutionFileInputRef.current) {
+      solutionFileInputRef.current.value = null;
+      solutionFileInputRef.current.click();
+    }
+  };
+
+  const handleSolutionFileSelected = async (file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      addToast('Please select a valid PDF file (.pdf)', 'error');
+      return;
+    }
+
+    if (editingMaterial && editingMaterial.id) {
+      try {
+        setIsReplacingSolution(true);
+        addToast('Uploading and replacing Solution PDF in database...', 'info');
+        const updated = await safeReplaceSectionPdf(
+          editingMaterial.id,
+          'solution',
+          file,
+          materialForm.solution_pdf_url || editingMaterial.solution_pdf_url
+        );
+
+        setMaterialForm((prev) => ({
+          ...prev,
+          solution_pdf_url: updated.solution_pdf_url,
+          solution_file_name: updated.solution_file_name,
+          solution_file_size: updated.solution_file_size,
+        }));
+        setSelectedSolutionFile(null);
+        addToast('Solution PDF replaced and saved to database successfully!', 'success');
+      } catch (err) {
+        addToast(err.message || 'Failed to replace Solution PDF', 'error');
+      } finally {
+        setIsReplacingSolution(false);
+        if (solutionFileInputRef.current) solutionFileInputRef.current.value = null;
+      }
+    } else {
+      setSelectedSolutionFile(file);
+      setMaterialForm((prev) => ({
+        ...prev,
+        solution_file_name: file.name,
+        solution_file_size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+      }));
+    }
+  };
+
+  const handlePromptDeleteSheet = () => {
+    setDeletePdfConfirm({
+      isOpen: true,
+      field: 'sheet',
+      title: materialForm.title || 'Section',
+      fileName: selectedSheetFile ? selectedSheetFile.name : materialForm.sheet_file_name || 'Sheet.pdf',
+      materialId: editingMaterial?.id || null,
+    });
+  };
+
+  const handlePromptDeleteSolution = () => {
+    setDeletePdfConfirm({
+      isOpen: true,
+      field: 'solution',
+      title: materialForm.title || 'Section',
+      fileName: selectedSolutionFile ? selectedSolutionFile.name : materialForm.solution_file_name || 'Solution.pdf',
+      materialId: editingMaterial?.id || null,
+    });
+  };
+
+  const handleConfirmDeletePdf = async () => {
+    const { field, materialId } = deletePdfConfirm;
+    try {
+      setIsDeletingPdf(true);
+      if (materialId) {
+        await safeDeleteSectionPdf(materialId, field);
+      }
+      if (field === 'sheet') {
+        setSelectedSheetFile(null);
+        setMaterialForm((prev) => ({
+          ...prev,
+          sheet_pdf_url: '',
+          sheet_file_name: '',
+          sheet_file_size: '',
+          file_url: prev.type === 'section' ? '' : prev.file_url,
+          file_name: prev.type === 'section' ? '' : prev.file_name,
+          file_size: prev.type === 'section' ? '' : prev.file_size,
+        }));
+        if (sheetFileInputRef.current) sheetFileInputRef.current.value = null;
+        addToast('Sheet PDF deleted successfully!', 'success');
+      } else if (field === 'solution') {
+        setSelectedSolutionFile(null);
+        setMaterialForm((prev) => ({
+          ...prev,
+          solution_pdf_url: '',
+          solution_file_name: '',
+          solution_file_size: '',
+        }));
+        if (solutionFileInputRef.current) solutionFileInputRef.current.value = null;
+        addToast('Solution PDF deleted successfully!', 'success');
+      }
+    } catch (err) {
+      addToast(err.message || `Failed to delete ${field} PDF`, 'error');
+    } finally {
+      setIsDeletingPdf(false);
+      setDeletePdfConfirm({ isOpen: false, field: '', title: '', fileName: '', materialId: null });
+    }
   };
 
   // Handle Material Modal Open
@@ -1949,16 +2130,17 @@ export default function AdminDashboard() {
                       className="hidden"
                       onChange={(e) => {
                         if (e.target.files?.[0]) {
-                          const file = e.target.files[0];
-                          setSelectedSheetFile(file);
-                          setMaterialForm((prev) => ({
-                            ...prev,
-                            sheet_file_name: file.name,
-                            sheet_file_size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-                          }));
+                          handleSheetFileSelected(e.target.files[0]);
                         }
                       }}
                     />
+
+                    {isReplacingSheet && (
+                      <div className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-950/60 border border-blue-500/40 text-xs text-blue-300">
+                        <Loader2 className="w-4 h-4 animate-spin text-blue-400 shrink-0" />
+                        <span className="font-semibold">Uploading & replacing Sheet PDF in Supabase...</span>
+                      </div>
+                    )}
 
                     {(selectedSheetFile || materialForm.sheet_pdf_url) ? (
                       <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1997,25 +2179,28 @@ export default function AdminDashboard() {
                           )}
                           <button
                             type="button"
-                            onClick={() => sheetFileInputRef.current?.click()}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            disabled={isReplacingSheet || isReplacingSolution || isSaving || isDeletingPdf}
+                            onClick={handleTriggerReplaceSheet}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
                             title="Replace Sheet PDF"
                           >
-                            <RotateCcw className="w-3.5 h-3.5" /> Replace
+                            {isReplacingSheet ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                                <span>Replacing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>Replace</span>
+                              </>
+                            )}
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedSheetFile(null);
-                              setMaterialForm((prev) => ({
-                                ...prev,
-                                sheet_pdf_url: '',
-                                sheet_file_name: '',
-                                sheet_file_size: '',
-                              }));
-                              if (sheetFileInputRef.current) sheetFileInputRef.current.value = '';
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            disabled={isReplacingSheet || isReplacingSolution || isSaving || isDeletingPdf}
+                            onClick={handlePromptDeleteSheet}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
                             title="Delete Sheet PDF"
                           >
                             <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -2025,16 +2210,26 @@ export default function AdminDashboard() {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => sheetFileInputRef.current?.click()}
-                        className="w-full p-4 border-2 border-dashed border-slate-700 hover:border-blue-500/60 rounded-xl bg-slate-950/40 hover:bg-blue-950/20 transition-all flex flex-col items-center justify-center gap-1.5 group text-center cursor-pointer"
+                        disabled={isReplacingSheet || isReplacingSolution || isSaving || isDeletingPdf}
+                        onClick={handleTriggerReplaceSheet}
+                        className="w-full p-4 border-2 border-dashed border-slate-700 hover:border-blue-500/60 rounded-xl bg-slate-950/40 hover:bg-blue-950/20 disabled:opacity-50 transition-all flex flex-col items-center justify-center gap-1.5 group text-center cursor-pointer"
                       >
-                        <Upload className="w-5 h-5 text-slate-400 group-hover:text-blue-400 transition-colors" />
-                        <span className="text-xs font-bold text-slate-300 group-hover:text-white">
-                          Upload Sheet PDF
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                          Exercises, lab worksheets, or assignment problems (.pdf)
-                        </span>
+                        {isReplacingSheet ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                            <span className="text-xs font-bold text-blue-300">Uploading Sheet PDF...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-5 h-5 text-slate-400 group-hover:text-blue-400 transition-colors" />
+                            <span className="text-xs font-bold text-slate-300 group-hover:text-white">
+                              Upload Sheet PDF
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              Exercises, lab worksheets, or assignment problems (.pdf)
+                            </span>
+                          </>
+                        )}
                       </button>
                     )}
                   </div>
@@ -2058,16 +2253,17 @@ export default function AdminDashboard() {
                       className="hidden"
                       onChange={(e) => {
                         if (e.target.files?.[0]) {
-                          const file = e.target.files[0];
-                          setSelectedSolutionFile(file);
-                          setMaterialForm((prev) => ({
-                            ...prev,
-                            solution_file_name: file.name,
-                            solution_file_size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-                          }));
+                          handleSolutionFileSelected(e.target.files[0]);
                         }
                       }}
                     />
+
+                    {isReplacingSolution && (
+                      <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-xs text-emerald-300">
+                        <Loader2 className="w-4 h-4 animate-spin text-emerald-400 shrink-0" />
+                        <span className="font-semibold">Uploading & replacing Solution PDF in Supabase...</span>
+                      </div>
+                    )}
 
                     {(selectedSolutionFile || materialForm.solution_pdf_url) ? (
                       <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2106,25 +2302,28 @@ export default function AdminDashboard() {
                           )}
                           <button
                             type="button"
-                            onClick={() => solutionFileInputRef.current?.click()}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            disabled={isReplacingSheet || isReplacingSolution || isSaving || isDeletingPdf}
+                            onClick={handleTriggerReplaceSolution}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
                             title="Replace Solution PDF"
                           >
-                            <RotateCcw className="w-3.5 h-3.5" /> Replace
+                            {isReplacingSolution ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                                <span>Replacing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>Replace</span>
+                              </>
+                            )}
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedSolutionFile(null);
-                              setMaterialForm((prev) => ({
-                                ...prev,
-                                solution_pdf_url: '',
-                                solution_file_name: '',
-                                solution_file_size: '',
-                              }));
-                              if (solutionFileInputRef.current) solutionFileInputRef.current.value = '';
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            disabled={isReplacingSheet || isReplacingSolution || isSaving || isDeletingPdf}
+                            onClick={handlePromptDeleteSolution}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
                             title="Delete Solution PDF"
                           >
                             <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -2134,16 +2333,26 @@ export default function AdminDashboard() {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => solutionFileInputRef.current?.click()}
-                        className="w-full p-4 border-2 border-dashed border-slate-700 hover:border-emerald-500/60 rounded-xl bg-slate-950/40 hover:bg-emerald-950/20 transition-all flex flex-col items-center justify-center gap-1.5 group text-center cursor-pointer"
+                        disabled={isReplacingSheet || isReplacingSolution || isSaving || isDeletingPdf}
+                        onClick={handleTriggerReplaceSolution}
+                        className="w-full p-4 border-2 border-dashed border-slate-700 hover:border-emerald-500/60 rounded-xl bg-slate-950/40 hover:bg-emerald-950/20 disabled:opacity-50 transition-all flex flex-col items-center justify-center gap-1.5 group text-center cursor-pointer"
                       >
-                        <Upload className="w-5 h-5 text-slate-400 group-hover:text-emerald-400 transition-colors" />
-                        <span className="text-xs font-bold text-slate-300 group-hover:text-white">
-                          Upload Solution PDF
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                          Model answer key, step-by-step solutions (.pdf)
-                        </span>
+                        {isReplacingSolution ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+                            <span className="text-xs font-bold text-emerald-300">Uploading Solution PDF...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-5 h-5 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+                            <span className="text-xs font-bold text-slate-300 group-hover:text-white">
+                              Upload Solution PDF
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              Model answer key, step-by-step solutions (.pdf)
+                            </span>
+                          </>
+                        )}
                       </button>
                     )}
                   </div>
@@ -2163,9 +2372,20 @@ export default function AdminDashboard() {
                     className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white"
                   />
                   {materialForm.file_name && !selectedFile && (
-                    <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-                      <FileText className="w-3.5 h-3.5 text-blue-400" /> Current: {materialForm.file_name}
-                    </p>
+                    <div className="flex items-center justify-between mt-1.5 text-[11px] text-slate-400">
+                      <p className="flex items-center gap-1 truncate">
+                        <FileText className="w-3.5 h-3.5 text-blue-400 shrink-0" /> Current: {materialForm.file_name}
+                      </p>
+                      {materialForm.file_url && (
+                        <button
+                          type="button"
+                          onClick={() => handleViewAdminPdf(materialForm.file_url, materialForm.title, materialForm.file_name)}
+                          className="text-blue-400 hover:text-blue-300 underline font-medium cursor-pointer shrink-0 ml-2"
+                        >
+                          View PDF
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -2191,10 +2411,14 @@ export default function AdminDashboard() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving || isUploading || isUploadingSheet || isUploadingSolution}
-                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg transition-all active:scale-95 min-h-[44px] cursor-pointer"
+                  disabled={isSaving || isUploading || isUploadingSheet || isUploadingSolution || isReplacingSheet || isReplacingSolution || isDeletingPdf}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg transition-all active:scale-95 min-h-[44px] cursor-pointer"
                 >
-                  {isUploadingSheet
+                  {isReplacingSheet
+                    ? 'Replacing Sheet...'
+                    : isReplacingSolution
+                    ? 'Replacing Solution...'
+                    : isUploadingSheet
                     ? 'Uploading Sheet...'
                     : isUploadingSolution
                     ? 'Uploading Solution...'
@@ -2464,6 +2688,18 @@ export default function AdminDashboard() {
         isLoading={isSaving}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteModal({ isOpen: false, type: '', id: null, title: '', details: null })}
+      />
+
+      {/* PDF Document Delete Confirmation (Prompt before deleting Sheet or Solution PDF) */}
+      <ConfirmationModal
+        isOpen={deletePdfConfirm.isOpen}
+        title={`Delete ${deletePdfConfirm.field === 'sheet' ? 'Sheet PDF' : 'Solution PDF'}?`}
+        message={`Are you sure you want to delete the ${deletePdfConfirm.field === 'sheet' ? 'Sheet' : 'Solution'} PDF (${deletePdfConfirm.fileName}) for "${deletePdfConfirm.title}"? This cannot be undone.`}
+        confirmText={isDeletingPdf ? 'Deleting...' : 'Delete PDF'}
+        confirmVariant="danger"
+        isLoading={isDeletingPdf}
+        onConfirm={handleConfirmDeletePdf}
+        onCancel={() => setDeletePdfConfirm({ isOpen: false, field: '', title: '', fileName: '', materialId: null })}
       />
 
       {/* File Preview Modal for Dashboard */}

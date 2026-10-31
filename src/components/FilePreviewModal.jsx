@@ -78,6 +78,14 @@ export default function FilePreviewModal({
 
   const mediaType = getMediaType(fileUrl, fileName);
 
+  // Ensure remote URLs have a cache-busting timestamp parameter
+  const cacheBustedUrl =
+    fileUrl && !fileUrl.startsWith('data:') && !fileUrl.startsWith('blob:')
+      ? (!fileUrl.includes('?v=') && !fileUrl.includes('&v=')
+          ? (fileUrl.includes('?') ? `${fileUrl}&v=${Date.now()}` : `${fileUrl}?v=${Date.now()}`)
+          : fileUrl)
+      : fileUrl;
+
   // Dedicated separate download function
   const handleDownload = async () => {
     try {
@@ -95,7 +103,7 @@ export default function FilePreviewModal({
 
       // Try fetching as blob to force browser download without opening
       try {
-        const res = await fetch(fileUrl, { mode: 'cors' });
+        const res = await fetch(cacheBustedUrl, { mode: 'cors', cache: 'no-cache' });
         if (res.ok) {
           const blob = await res.blob();
           const blobUrl = window.URL.createObjectURL(blob);
@@ -114,7 +122,7 @@ export default function FilePreviewModal({
 
       // Fallback direct anchor download
       const link = document.createElement('a');
-      link.href = fileUrl;
+      link.href = cacheBustedUrl;
       link.download = fileName || 'study_document.pdf';
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
@@ -126,7 +134,7 @@ export default function FilePreviewModal({
     }
   };
 
-  const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+  const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(cacheBustedUrl)}&embedded=true`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fade-in">
@@ -261,11 +269,11 @@ export default function FilePreviewModal({
           {mediaType === 'pdf' && (
             <div className="w-full h-full relative">
               <iframe
-                key={viewMode}
+                key={`${viewMode}_${cacheBustedUrl}`}
                 src={
                   viewMode === 'google' && !fileUrl.startsWith('data:')
                     ? googleViewerUrl
-                    : `${fileUrl}#toolbar=1&navpanes=0`
+                    : `${cacheBustedUrl}#toolbar=1&navpanes=0`
                 }
                 title={title}
                 className="w-full h-full border-0 bg-slate-900"

@@ -50,14 +50,15 @@ export default async function handler(req, res) {
     const fileBuffer = Buffer.from(base64Data, 'base64');
 
     const cleanFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const filePath = `${folder}/${Date.now()}_${cleanFileName}`;
+    const uniqueSalt = Math.random().toString(36).substring(2, 8);
+    const filePath = `${folder}/${Date.now()}_${uniqueSalt}_${cleanFileName}`;
 
-    // Upload to Supabase Storage
+    // Upload to Supabase Storage with tight cache control for fast CDN invalidation
     const { error: uploadError } = await supabaseAdmin.storage
       .from(STORAGE_BUCKET)
       .upload(filePath, fileBuffer, {
         contentType: fileType || 'application/pdf',
-        cacheControl: '3600',
+        cacheControl: '60',
         upsert: false,
       });
 
@@ -66,10 +67,12 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: `Supabase Storage error: ${uploadError.message}` });
     }
 
-    // Get public URL
+    // Get public URL with version query param to guarantee fresh rendering
     const { data: urlData } = supabaseAdmin.storage
       .from(STORAGE_BUCKET)
       .getPublicUrl(filePath);
+
+    const versionedUrl = `${urlData.publicUrl}?v=${Date.now()}`;
 
     // Format human-readable size
     const bytes = fileBuffer.length;
@@ -82,7 +85,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      file_url: urlData.publicUrl,
+      file_url: versionedUrl,
+      raw_file_url: urlData.publicUrl,
+      storage_path: filePath,
       file_name: fileName,
       file_size: formattedSize,
     });

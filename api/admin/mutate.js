@@ -18,6 +18,76 @@ async function removeStorageFile(fileUrl) {
   }
 }
 
+// Safely check if a storage file is referenced elsewhere before deleting
+async function isFileReferencedElsewhere(fileUrl, excludeTable = null, excludeId = null) {
+  if (!fileUrl) return false;
+  const targetPath = extractStoragePath(fileUrl);
+  if (!targetPath) return false;
+
+  try {
+    const { data: mats } = await supabaseAdmin
+      .from('materials')
+      .select('id, file_url, external_url')
+      .limit(300);
+
+    if (mats) {
+      for (const m of mats) {
+        if (excludeTable === 'materials' && String(m.id) === String(excludeId)) continue;
+        if (m.file_url && extractStoragePath(m.file_url) === targetPath) return true;
+        if (m.external_url && m.external_url.includes(targetPath)) return true;
+      }
+    }
+
+    const { data: warns } = await supabaseAdmin
+      .from('warnings')
+      .select('id, file_url')
+      .limit(300);
+
+    if (warns) {
+      for (const w of warns) {
+        if (excludeTable === 'warnings' && String(w.id) === String(excludeId)) continue;
+        if (w.file_url && extractStoragePath(w.file_url) === targetPath) return true;
+      }
+    }
+  } catch (err) {
+    console.warn('Reference check notice:', err);
+    return true; // Conservative fallback: if error, do not delete
+  }
+  return false;
+}
+
+// Only remove storage file if not referenced by another educational item
+async function safelyDeleteOldFile(fileUrl, excludeTable = null, excludeId = null) {
+  if (!fileUrl) return false;
+  const isReferenced = await isFileReferencedElsewhere(fileUrl, excludeTable, excludeId);
+  if (!isReferenced) {
+    await removeStorageFile(fileUrl);
+    return true;
+  }
+  return false;
+}
+
+// Unpack encoded metadata from external_url if columns were stored as fallback
+function unpackMaterialMeta(record) {
+  if (!record || typeof record !== 'object') return record;
+  if (record.external_url && record.external_url.startsWith('__studyhub_meta__:')) {
+    try {
+      const meta = JSON.parse(record.external_url.replace('__studyhub_meta__:', ''));
+      return {
+        ...record,
+        sheet_pdf_url: record.sheet_pdf_url || meta.sheet_pdf_url || (record.type === 'section' ? record.file_url : ''),
+        sheet_file_name: record.sheet_file_name || meta.sheet_file_name || (record.type === 'section' ? record.file_name : ''),
+        sheet_file_size: record.sheet_file_size || meta.sheet_file_size || (record.type === 'section' ? record.file_size : ''),
+        solution_pdf_url: record.solution_pdf_url || meta.solution_pdf_url || '',
+        solution_file_name: record.solution_file_name || meta.solution_file_name || '',
+        solution_file_size: record.solution_file_size || meta.solution_file_size || '',
+        external_url: meta.real_external_url || '',
+      };
+    } catch {}
+  }
+  return record;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -108,6 +178,52 @@ export default async function handler(req, res) {
         insertError = err;
       }
 
+      // If column sheet_pdf_url/solution_pdf_url missing in Supabase schema, fallback safely
+      if (insertError && table === 'materials') {
+        const isMissingCol =
+          insertError.code === 'PGRST204' ||
+          insertError.message?.includes('sheet_pdf_url') ||
+          insertError.message?.includes('solution_pdf_url');
+
+        if (isMissingCol) {
+          const fallbackMeta = {
+            sheet_pdf_url: data.sheet_pdf_url || '',
+            sheet_file_name: data.sheet_file_name || '',
+            sheet_file_size: data.sheet_file_size || '',
+            solution_pdf_url: data.solution_pdf_url || '',
+            solution_file_name: data.solution_file_name || '',
+            solution_file_size: data.solution_file_size || '',
+            real_external_url: data.external_url || '',
+          };
+
+          const stripped = { ...data };
+          delete stripped.sheet_pdf_url;
+          delete stripped.sheet_file_name;
+          delete stripped.sheet_file_size;
+          delete stripped.solution_pdf_url;
+          delete stripped.solution_file_name;
+          delete stripped.solution_file_size;
+
+          if (fallbackMeta.sheet_pdf_url) {
+            stripped.file_url = fallbackMeta.sheet_pdf_url;
+            stripped.file_name = fallbackMeta.sheet_file_name;
+            stripped.file_size = fallbackMeta.sheet_file_size;
+          }
+          stripped.external_url = `__studyhub_meta__:${JSON.stringify(fallbackMeta)}`;
+
+          const resFallback = await supabaseAdmin
+            .from(table)
+            .insert([stripped])
+            .select()
+            .single();
+
+          if (!resFallback.error && resFallback.data) {
+            inserted = unpackMaterialMeta(resFallback.data);
+            insertError = null;
+          }
+        }
+      }
+
       // Fallback to SECURITY DEFINER RPC if direct insert fails or is blocked by RLS
       if (insertError || !inserted) {
         console.log(`Direct insert failed on ${table}, attempting admin_mutate_record RPC...`, insertError?.message);
@@ -127,7 +243,7 @@ export default async function handler(req, res) {
         inserted = rpcData;
       }
 
-      return res.status(200).json({ success: true, data: inserted });
+      return res.status(200).json({ success: true, data: unpackMaterialMeta(inserted) });
     }
 
     // B. UPDATE
@@ -135,13 +251,21 @@ export default async function handler(req, res) {
       if (!id) return res.status(400).json({ error: 'Missing ID for update' });
       if (!data) return res.status(400).json({ error: 'Missing data payload for update' });
 
+      // Separate any cleanup instructions passed in data
+      const {
+        old_file_url,
+        old_sheet_url,
+        old_solution_url,
+        ...updatePayload
+      } = data;
+
       let updated = null;
       let updateError = null;
 
       try {
         const resDirect = await supabaseAdmin
           .from(table)
-          .update(data)
+          .update(updatePayload)
           .eq('id', id)
           .select()
           .single();
@@ -151,6 +275,53 @@ export default async function handler(req, res) {
         updateError = err;
       }
 
+      // If column sheet_pdf_url/solution_pdf_url missing in Supabase schema, fallback safely
+      if (updateError && table === 'materials') {
+        const isMissingCol =
+          updateError.code === 'PGRST204' ||
+          updateError.message?.includes('sheet_pdf_url') ||
+          updateError.message?.includes('solution_pdf_url');
+
+        if (isMissingCol) {
+          const fallbackMeta = {
+            sheet_pdf_url: updatePayload.sheet_pdf_url || '',
+            sheet_file_name: updatePayload.sheet_file_name || '',
+            sheet_file_size: updatePayload.sheet_file_size || '',
+            solution_pdf_url: updatePayload.solution_pdf_url || '',
+            solution_file_name: updatePayload.solution_file_name || '',
+            solution_file_size: updatePayload.solution_file_size || '',
+            real_external_url: updatePayload.external_url || '',
+          };
+
+          const stripped = { ...updatePayload };
+          delete stripped.sheet_pdf_url;
+          delete stripped.sheet_file_name;
+          delete stripped.sheet_file_size;
+          delete stripped.solution_pdf_url;
+          delete stripped.solution_file_name;
+          delete stripped.solution_file_size;
+
+          if (fallbackMeta.sheet_pdf_url) {
+            stripped.file_url = fallbackMeta.sheet_pdf_url;
+            stripped.file_name = fallbackMeta.sheet_file_name;
+            stripped.file_size = fallbackMeta.sheet_file_size;
+          }
+          stripped.external_url = `__studyhub_meta__:${JSON.stringify(fallbackMeta)}`;
+
+          const resFallback = await supabaseAdmin
+            .from(table)
+            .update(stripped)
+            .eq('id', id)
+            .select()
+            .single();
+
+          if (!resFallback.error && resFallback.data) {
+            updated = unpackMaterialMeta(resFallback.data);
+            updateError = null;
+          }
+        }
+      }
+
       // Fallback to SECURITY DEFINER RPC if direct update fails or is blocked by RLS
       if (updateError || !updated) {
         console.log(`Direct update failed on ${table}, attempting admin_mutate_record RPC...`, updateError?.message);
@@ -158,7 +329,7 @@ export default async function handler(req, res) {
           p_secret: SESSION_SECRET,
           p_action: 'update',
           p_table: table,
-          p_data: data,
+          p_data: updatePayload,
           p_id: id,
         });
 
@@ -171,7 +342,237 @@ export default async function handler(req, res) {
         updated = rpcData;
       }
 
-      return res.status(200).json({ success: true, data: updated });
+      // Safe old file cleanup: only clean up if update succeeded and file is unreferenced
+      if (updated) {
+        if (old_file_url && old_file_url !== updatePayload.file_url) {
+          await safelyDeleteOldFile(old_file_url, table, id);
+        }
+        if (old_sheet_url && old_sheet_url !== updatePayload.sheet_pdf_url) {
+          await safelyDeleteOldFile(old_sheet_url, table, id);
+        }
+        if (old_solution_url && old_solution_url !== updatePayload.solution_pdf_url) {
+          await safelyDeleteOldFile(old_solution_url, table, id);
+        }
+      }
+
+      return res.status(200).json({ success: true, data: unpackMaterialMeta(updated) });
+    }
+
+    // C. ATOMIC SAFE REPLACE FILE
+    if (action === 'safe_replace_file') {
+      const { field, newUrl, newName, newSize, oldUrl } = data || {};
+      if (!id) return res.status(400).json({ error: 'Missing ID for replace' });
+      if (!newUrl) return res.status(400).json({ error: 'Missing newUrl for replace' });
+
+      // 1. Fetch current material
+      const { data: currentItem, error: fetchErr } = await supabaseAdmin
+        .from('materials')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchErr || !currentItem) {
+        return res.status(404).json({ error: `Material with id "${id}" not found: ${fetchErr?.message}` });
+      }
+
+      const unpackedCurrent = unpackMaterialMeta(currentItem);
+
+      // 2. Prepare atomic update
+      const updatePayload = {};
+      if (field === 'sheet') {
+        updatePayload.sheet_pdf_url = newUrl;
+        updatePayload.sheet_file_name = newName || '';
+        updatePayload.sheet_file_size = newSize || '';
+        updatePayload.file_url = newUrl;
+        updatePayload.file_name = newName || '';
+        updatePayload.file_size = newSize || '';
+      } else if (field === 'solution') {
+        updatePayload.solution_pdf_url = newUrl;
+        updatePayload.solution_file_name = newName || '';
+        updatePayload.solution_file_size = newSize || '';
+      } else {
+        updatePayload.file_url = newUrl;
+        updatePayload.file_name = newName || '';
+        updatePayload.file_size = newSize || '';
+      }
+
+      let updated = null;
+      let updateError = null;
+
+      try {
+        const resDirect = await supabaseAdmin
+          .from('materials')
+          .update(updatePayload)
+          .eq('id', id)
+          .select()
+          .single();
+        updated = resDirect.data;
+        updateError = resDirect.error;
+      } catch (err) {
+        updateError = err;
+      }
+
+      // Schema fallback if columns do not exist yet
+      if (updateError || !updated) {
+        const fallbackMeta = {
+          sheet_pdf_url: field === 'sheet' ? newUrl : (unpackedCurrent.sheet_pdf_url || unpackedCurrent.file_url || ''),
+          sheet_file_name: field === 'sheet' ? newName : (unpackedCurrent.sheet_file_name || unpackedCurrent.file_name || ''),
+          sheet_file_size: field === 'sheet' ? newSize : (unpackedCurrent.sheet_file_size || unpackedCurrent.file_size || ''),
+          solution_pdf_url: field === 'solution' ? newUrl : (unpackedCurrent.solution_pdf_url || ''),
+          solution_file_name: field === 'solution' ? newName : (unpackedCurrent.solution_file_name || ''),
+          solution_file_size: field === 'solution' ? newSize : (unpackedCurrent.solution_file_size || ''),
+          real_external_url: unpackedCurrent.external_url || '',
+        };
+
+        const strippedPayload = {};
+        if (field === 'sheet') {
+          strippedPayload.file_url = newUrl;
+          strippedPayload.file_name = newName || '';
+          strippedPayload.file_size = newSize || '';
+        }
+        strippedPayload.external_url = `__studyhub_meta__:${JSON.stringify(fallbackMeta)}`;
+
+        const resFallback = await supabaseAdmin
+          .from('materials')
+          .update(strippedPayload)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (resFallback.error || !resFallback.data) {
+          return res.status(500).json({
+            error: `Database update failed: ${resFallback.error?.message || updateError?.message}`,
+          });
+        }
+
+        updated = {
+          ...resFallback.data,
+          sheet_pdf_url: fallbackMeta.sheet_pdf_url,
+          sheet_file_name: fallbackMeta.sheet_file_name,
+          sheet_file_size: fallbackMeta.sheet_file_size,
+          solution_pdf_url: fallbackMeta.solution_pdf_url,
+          solution_file_name: fallbackMeta.solution_file_name,
+          solution_file_size: fallbackMeta.solution_file_size,
+          external_url: fallbackMeta.real_external_url,
+        };
+      }
+
+      // 3. Deletion of previous file ONLY after replacement is confirmed
+      const targetOldUrl = oldUrl || (field === 'sheet' ? unpackedCurrent.sheet_pdf_url || unpackedCurrent.file_url : unpackedCurrent.solution_pdf_url);
+      if (targetOldUrl && targetOldUrl !== newUrl) {
+        await safelyDeleteOldFile(targetOldUrl, 'materials', id);
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: unpackMaterialMeta(updated),
+        message: `${field === 'sheet' ? 'Sheet' : field === 'solution' ? 'Solution' : 'Material'} PDF replaced successfully.`,
+      });
+    }
+
+    // D. ATOMIC SAFE DELETE PDF
+    if (action === 'safe_delete_pdf') {
+      const { field } = data || {};
+      if (!id) return res.status(400).json({ error: 'Missing ID' });
+
+      const { data: currentItem, error: fetchErr } = await supabaseAdmin
+        .from('materials')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchErr || !currentItem) {
+        return res.status(404).json({ error: `Material with id "${id}" not found: ${fetchErr?.message}` });
+      }
+
+      const unpackedCurrent = unpackMaterialMeta(currentItem);
+      let oldFileToDelete = null;
+      const updatePayload = {};
+
+      if (field === 'sheet') {
+        oldFileToDelete = unpackedCurrent.sheet_pdf_url || unpackedCurrent.file_url;
+        updatePayload.sheet_pdf_url = '';
+        updatePayload.sheet_file_name = '';
+        updatePayload.sheet_file_size = '';
+        updatePayload.file_url = '';
+        updatePayload.file_name = '';
+        updatePayload.file_size = '';
+      } else if (field === 'solution') {
+        oldFileToDelete = unpackedCurrent.solution_pdf_url;
+        updatePayload.solution_pdf_url = '';
+        updatePayload.solution_file_name = '';
+        updatePayload.solution_file_size = '';
+      }
+
+      let updated = null;
+      let updateError = null;
+
+      try {
+        const resDirect = await supabaseAdmin
+          .from('materials')
+          .update(updatePayload)
+          .eq('id', id)
+          .select()
+          .single();
+        updated = resDirect.data;
+        updateError = resDirect.error;
+      } catch (err) {
+        updateError = err;
+      }
+
+      if (updateError || !updated) {
+        const fallbackMeta = {
+          sheet_pdf_url: field === 'sheet' ? '' : (unpackedCurrent.sheet_pdf_url || unpackedCurrent.file_url || ''),
+          sheet_file_name: field === 'sheet' ? '' : (unpackedCurrent.sheet_file_name || unpackedCurrent.file_name || ''),
+          sheet_file_size: field === 'sheet' ? '' : (unpackedCurrent.sheet_file_size || unpackedCurrent.file_size || ''),
+          solution_pdf_url: field === 'solution' ? '' : (unpackedCurrent.solution_pdf_url || ''),
+          solution_file_name: field === 'solution' ? '' : (unpackedCurrent.solution_file_name || ''),
+          solution_file_size: field === 'solution' ? '' : (unpackedCurrent.solution_file_size || ''),
+          real_external_url: unpackedCurrent.external_url || '',
+        };
+
+        const strippedPayload = {};
+        if (field === 'sheet') {
+          strippedPayload.file_url = '';
+          strippedPayload.file_name = '';
+          strippedPayload.file_size = '';
+        }
+        strippedPayload.external_url = `__studyhub_meta__:${JSON.stringify(fallbackMeta)}`;
+
+        const resFallback = await supabaseAdmin
+          .from('materials')
+          .update(strippedPayload)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (resFallback.error || !resFallback.data) {
+          return res.status(500).json({
+            error: `Database update failed: ${resFallback.error?.message || updateError?.message}`,
+          });
+        }
+
+        updated = {
+          ...resFallback.data,
+          sheet_pdf_url: fallbackMeta.sheet_pdf_url,
+          sheet_file_name: fallbackMeta.sheet_file_name,
+          sheet_file_size: fallbackMeta.sheet_file_size,
+          solution_pdf_url: fallbackMeta.solution_pdf_url,
+          solution_file_name: fallbackMeta.solution_file_name,
+          solution_file_size: fallbackMeta.solution_file_size,
+          external_url: fallbackMeta.real_external_url,
+        };
+      }
+
+      if (oldFileToDelete) {
+        await safelyDeleteOldFile(oldFileToDelete, 'materials', id);
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: unpackMaterialMeta(updated),
+        message: `${field === 'sheet' ? 'Sheet' : 'Solution'} PDF removed successfully.`,
+      });
     }
 
     // C. DELETE (PERMANENT DELETION WITH STORAGE CLEANUP)

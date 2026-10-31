@@ -130,12 +130,16 @@ export default function SubjectDetailsPage() {
     fileName: '',
   });
 
-  // Open Preview Modal (View button: previews without downloading)
+  // Open Preview Modal (View button: previews without downloading, cache-busted)
   const handleView = (item) => {
-    const url = item.file_url || item.external_url;
+    let url = item.file_url || item.external_url;
     if (!url) {
       addToast('No preview available for this item.', 'error');
       return;
+    }
+
+    if (!url.includes('?v=') && !url.includes('&v=')) {
+      url = url.includes('?') ? `${url}&v=${Date.now()}` : `${url}?v=${Date.now()}`;
     }
 
     // Record study activity
@@ -156,12 +160,16 @@ export default function SubjectDetailsPage() {
     });
   };
 
-  // Dedicated separate Download handler
+  // Dedicated separate Download handler (bypasses stale browser cache)
   const handleDownload = async (item) => {
-    const url = item.file_url || item.external_url;
+    let url = item.file_url || item.external_url;
     if (!url) {
       addToast('No download link available.', 'error');
       return;
+    }
+
+    if (!url.includes('?v=') && !url.includes('&v=')) {
+      url = url.includes('?') ? `${url}&v=${Date.now()}` : `${url}?v=${Date.now()}`;
     }
 
     addToast(`Downloading ${item.file_name || item.title}...`, 'info');
@@ -177,7 +185,7 @@ export default function SubjectDetailsPage() {
         return;
       }
 
-      const res = await fetch(url, { mode: 'cors' });
+      const res = await fetch(url, { mode: 'cors', cache: 'no-cache' });
       if (res.ok) {
         const blob = await res.blob();
         const blobUrl = window.URL.createObjectURL(blob);

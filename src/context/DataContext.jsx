@@ -24,6 +24,34 @@ function getDeletedIdsSet() {
   }
 }
 
+// Unpack encoded metadata from external_url if columns were stored as fallback
+export function normalizeMaterial(m) {
+  if (!m || typeof m !== 'object') return m;
+  let res = { ...m };
+  if (res.external_url && typeof res.external_url === 'string' && res.external_url.startsWith('__studyhub_meta__:')) {
+    try {
+      const meta = JSON.parse(res.external_url.replace('__studyhub_meta__:', ''));
+      res = {
+        ...res,
+        sheet_pdf_url: res.sheet_pdf_url || meta.sheet_pdf_url || (res.type === 'section' ? res.file_url : ''),
+        sheet_file_name: res.sheet_file_name || meta.sheet_file_name || (res.type === 'section' ? res.file_name : ''),
+        sheet_file_size: res.sheet_file_size || meta.sheet_file_size || (res.type === 'section' ? res.file_size : ''),
+        solution_pdf_url: res.solution_pdf_url || meta.solution_pdf_url || '',
+        solution_file_name: res.solution_file_name || meta.solution_file_name || '',
+        solution_file_size: res.solution_file_size || meta.solution_file_size || '',
+        external_url: meta.real_external_url || '',
+      };
+    } catch {}
+  } else if (res.type === 'section') {
+    if (!res.sheet_pdf_url && res.file_url) {
+      res.sheet_pdf_url = res.file_url;
+      res.sheet_file_name = res.file_name || '';
+      res.sheet_file_size = res.file_size || '';
+    }
+  }
+  return res;
+}
+
 function markItemDeleted(id) {
   if (!id) return;
   try {
@@ -113,11 +141,11 @@ export function DataProvider({ children }) {
           console.warn('Note on warnings query:', warnErr);
         }
 
-        // Filter out any tombstoned/deleted records
+        // Filter out any tombstoned/deleted records and normalize metadata
         const activeSubs = (subData || []).filter((s) => !deletedSet.has(s.id));
-        const activeMats = (matData || []).filter(
-          (m) => !deletedSet.has(m.id) && !deletedSet.has(m.subject_id)
-        );
+        const activeMats = (matData || [])
+          .map(normalizeMaterial)
+          .filter((m) => !deletedSet.has(m.id) && !deletedSet.has(m.subject_id));
         const activeAnn = (annData || []).filter(
           (a) => !deletedSet.has(a.id) && !deletedSet.has(a.subject_id)
         );
@@ -166,13 +194,21 @@ export function DataProvider({ children }) {
       const rawWarn = storedWarn ? JSON.parse(storedWarn) : INITIAL_WARNINGS;
 
       setSubjects((rawSubs || []).filter((s) => !deletedSet.has(s.id)));
-      setMaterials((rawMats || []).filter((m) => !deletedSet.has(m.id) && !deletedSet.has(m.subject_id)));
+      setMaterials(
+        (rawMats || [])
+          .map(normalizeMaterial)
+          .filter((m) => !deletedSet.has(m.id) && !deletedSet.has(m.subject_id))
+      );
       setAnnouncements((rawAnn || []).filter((a) => !deletedSet.has(a.id) && !deletedSet.has(a.subject_id)));
       setWarnings((rawWarn || []).filter((w) => !deletedSet.has(w.id) && !deletedSet.has(w.subject_id)));
     } catch {
       const deletedSet = getDeletedIdsSet();
       setSubjects(INITIAL_SUBJECTS.filter((s) => !deletedSet.has(s.id)));
-      setMaterials(INITIAL_MATERIALS.filter((m) => !deletedSet.has(m.id) && !deletedSet.has(m.subject_id)));
+      setMaterials(
+        INITIAL_MATERIALS.map(normalizeMaterial).filter(
+          (m) => !deletedSet.has(m.id) && !deletedSet.has(m.subject_id)
+        )
+      );
       setAnnouncements(INITIAL_ANNOUNCEMENTS.filter((a) => !deletedSet.has(a.id) && !deletedSet.has(a.subject_id)));
       setWarnings(INITIAL_WARNINGS.filter((w) => !deletedSet.has(w.id) && !deletedSet.has(w.subject_id)));
     }
@@ -484,8 +520,16 @@ export function DataProvider({ children }) {
     };
 
     try {
-      const cloudData = await mutateCloudDatabase('insert', 'materials', payload);
-      setMaterials((prev) => [cloudData, ...prev]);
+      const rawCloudData = await mutateCloudDatabase('insert', 'materials', payload);
+      const cloudData = normalizeMaterial(rawCloudData);
+      setMaterials((prev) => {
+        const next = [cloudData, ...prev];
+        try {
+          localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      loadData();
       return cloudData;
     } catch (err) {
       if (isSupabaseConfigured && supabase) {
@@ -495,8 +539,16 @@ export function DataProvider({ children }) {
           .select()
           .single();
         if (error) throw new Error(`Supabase material insert failed: ${error.message}`);
-        setMaterials((prev) => [data, ...prev]);
-        return data;
+        const norm = normalizeMaterial(data);
+        setMaterials((prev) => {
+          const next = [norm, ...prev];
+          try {
+            localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+        loadData();
+        return norm;
       }
 
       throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
@@ -523,8 +575,16 @@ export function DataProvider({ children }) {
     };
 
     try {
-      const cloudData = await mutateCloudDatabase('update', 'materials', payload, id);
-      setMaterials((prev) => prev.map((m) => (m.id === id ? cloudData : m)));
+      const rawCloudData = await mutateCloudDatabase('update', 'materials', payload, id);
+      const cloudData = normalizeMaterial(rawCloudData);
+      setMaterials((prev) => {
+        const next = prev.map((m) => (m.id === id ? { ...m, ...cloudData } : m));
+        try {
+          localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      loadData();
       return cloudData;
     } catch (err) {
       if (isSupabaseConfigured && supabase) {
@@ -535,12 +595,80 @@ export function DataProvider({ children }) {
           .select()
           .single();
         if (error) throw new Error(`Supabase material update failed: ${error.message}`);
-        setMaterials((prev) => prev.map((m) => (m.id === id ? data : m)));
-        return data;
+        const norm = normalizeMaterial(data);
+        setMaterials((prev) => {
+          const next = prev.map((m) => (m.id === id ? { ...m, ...norm } : m));
+          try {
+            localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+        loadData();
+        return norm;
       }
 
       throw new Error(`Cloud Database Error: ${err.message || supabaseConfigReason || 'Supabase is not configured'}`);
     }
+  };
+
+  // Dedicated Atomic Safe Replace for Section PDFs (Sheet or Solution)
+  const safeReplaceSectionPdf = async (materialId, field, file, oldFileUrl) => {
+    if (!materialId) throw new Error('Material ID is required for replacement');
+    if (!file) throw new Error('No PDF file provided for replacement');
+
+    const folder = field === 'solution' ? 'sections/solutions' : 'sections/sheets';
+    const uploadRes = await uploadFile(file, folder);
+
+    const rawUpdated = await mutateCloudDatabase(
+      'safe_replace_file',
+      'materials',
+      {
+        field,
+        newUrl: uploadRes.file_url,
+        newName: uploadRes.file_name,
+        newSize: uploadRes.file_size,
+        oldUrl: oldFileUrl,
+      },
+      materialId
+    );
+
+    const updatedItem = normalizeMaterial(rawUpdated);
+
+    setMaterials((prev) => {
+      const next = prev.map((m) => (m.id === materialId ? { ...m, ...updatedItem } : m));
+      try {
+        localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    loadData();
+    return updatedItem;
+  };
+
+  // Dedicated Atomic Safe Delete for Section PDFs (Sheet or Solution)
+  const safeDeleteSectionPdf = async (materialId, field) => {
+    if (!materialId) throw new Error('Material ID is required for deletion');
+
+    const rawUpdated = await mutateCloudDatabase(
+      'safe_delete_pdf',
+      'materials',
+      { field },
+      materialId
+    );
+
+    const updatedItem = normalizeMaterial(rawUpdated);
+
+    setMaterials((prev) => {
+      const next = prev.map((m) => (m.id === materialId ? { ...m, ...updatedItem } : m));
+      try {
+        localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    loadData();
+    return updatedItem;
   };
 
   const deleteMaterial = async (id) => {
@@ -794,12 +922,13 @@ export function DataProvider({ children }) {
       // 2. Direct client Supabase Storage upload fallback if configured
       if (isSupabaseConfigured && supabase) {
         const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const filePath = `${folder}/${Date.now()}_${cleanFileName}`;
+        const uniqueSalt = Math.random().toString(36).substring(2, 9);
+        const filePath = `${folder}/${Date.now()}_${uniqueSalt}_${cleanFileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from(SUPABASE_STORAGE_BUCKET)
           .upload(filePath, file, {
-            cacheControl: '3600',
+            cacheControl: '60',
             upsert: false,
           });
 
@@ -809,7 +938,7 @@ export function DataProvider({ children }) {
             .getPublicUrl(filePath);
 
           return {
-            file_url: data.publicUrl,
+            file_url: `${data.publicUrl}?v=${Date.now()}`,
             file_name: file.name,
             file_size: formatBytes(file.size),
           };
@@ -857,6 +986,8 @@ export function DataProvider({ children }) {
         addMaterial,
         updateMaterial,
         deleteMaterial,
+        safeReplaceSectionPdf,
+        safeDeleteSectionPdf,
         // Announcement operations
         addAnnouncement,
         updateAnnouncement,
