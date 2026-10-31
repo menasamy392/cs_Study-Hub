@@ -475,6 +475,12 @@ export function DataProvider({ children }) {
       external_url: materialData.external_url || '',
       file_name: materialData.file_name || '',
       file_size: materialData.file_size || '',
+      sheet_pdf_url: materialData.sheet_pdf_url || '',
+      sheet_file_name: materialData.sheet_file_name || '',
+      sheet_file_size: materialData.sheet_file_size || '',
+      solution_pdf_url: materialData.solution_pdf_url || '',
+      solution_file_name: materialData.solution_file_name || '',
+      solution_file_size: materialData.solution_file_size || '',
     };
 
     try {
@@ -508,6 +514,12 @@ export function DataProvider({ children }) {
       external_url: updates.external_url !== undefined ? updates.external_url : '',
       file_name: updates.file_name !== undefined ? updates.file_name : '',
       file_size: updates.file_size !== undefined ? updates.file_size : '',
+      sheet_pdf_url: updates.sheet_pdf_url !== undefined ? updates.sheet_pdf_url : '',
+      sheet_file_name: updates.sheet_file_name !== undefined ? updates.sheet_file_name : '',
+      sheet_file_size: updates.sheet_file_size !== undefined ? updates.sheet_file_size : '',
+      solution_pdf_url: updates.solution_pdf_url !== undefined ? updates.solution_pdf_url : '',
+      solution_file_name: updates.solution_file_name !== undefined ? updates.solution_file_name : '',
+      solution_file_size: updates.solution_file_size !== undefined ? updates.solution_file_size : '',
     };
 
     try {

@@ -181,7 +181,16 @@ export default async function handler(req, res) {
       // 1. Collect files to delete from Supabase Storage
       const filesToDelete = [];
       try {
-        if (table === 'materials' || table === 'warnings') {
+        if (table === 'materials') {
+          const { data: item } = await supabaseAdmin
+            .from(table)
+            .select('file_url, sheet_pdf_url, solution_pdf_url')
+            .eq('id', id)
+            .maybeSingle();
+          if (item?.file_url) filesToDelete.push(item.file_url);
+          if (item?.sheet_pdf_url) filesToDelete.push(item.sheet_pdf_url);
+          if (item?.solution_pdf_url) filesToDelete.push(item.solution_pdf_url);
+        } else if (table === 'warnings') {
           const { data: item } = await supabaseAdmin
             .from(table)
             .select('file_url')
@@ -191,13 +200,19 @@ export default async function handler(req, res) {
         } else if (table === 'subjects') {
           const { data: mats } = await supabaseAdmin
             .from('materials')
-            .select('file_url')
+            .select('file_url, sheet_pdf_url, solution_pdf_url')
             .eq('subject_id', id);
           const { data: warns } = await supabaseAdmin
             .from('warnings')
             .select('file_url')
             .eq('subject_id', id);
-          if (mats) filesToDelete.push(...mats.map((m) => m.file_url).filter(Boolean));
+          if (mats) {
+            mats.forEach((m) => {
+              if (m.file_url) filesToDelete.push(m.file_url);
+              if (m.sheet_pdf_url) filesToDelete.push(m.sheet_pdf_url);
+              if (m.solution_pdf_url) filesToDelete.push(m.solution_pdf_url);
+            });
+          }
           if (warns) filesToDelete.push(...warns.map((w) => w.file_url).filter(Boolean));
         }
       } catch (fileErr) {

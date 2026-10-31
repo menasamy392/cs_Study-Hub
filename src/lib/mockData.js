@@ -197,6 +197,12 @@ export const INITIAL_MATERIALS = [
     external_url: "https://github.com/westes/flex",
     file_name: "Compiler_Section01_Flex.pdf",
     file_size: "1.4 MB",
+    sheet_pdf_url: SAMPLE_COMPILER_PDF,
+    sheet_file_name: "Compiler_Section01_Flex_Exercises.pdf",
+    sheet_file_size: "1.4 MB",
+    solution_pdf_url: SAMPLE_COMPILER_PDF,
+    solution_file_name: "Compiler_Section01_Flex_Model_Solution.pdf",
+    solution_file_size: "1.8 MB",
     created_at: new Date(Date.now() - 25 * 24 * 3600 * 1000).toISOString()
   },
   {
@@ -210,6 +216,12 @@ export const INITIAL_MATERIALS = [
     external_url: "",
     file_name: "Compiler_Section02_Bison.pdf",
     file_size: "1.8 MB",
+    sheet_pdf_url: SAMPLE_COMPILER_PDF,
+    sheet_file_name: "Compiler_Section02_Bison_Grammar_Sheet.pdf",
+    sheet_file_size: "1.8 MB",
+    solution_pdf_url: "",
+    solution_file_name: "",
+    solution_file_size: "",
     created_at: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString()
   },
   {
@@ -301,6 +313,12 @@ export const INITIAL_MATERIALS = [
     external_url: "https://www.postgresql.org/docs/current/using-explain.html",
     file_name: "DB2_Section_01_Explain_Analyze.pdf",
     file_size: "1.2 MB",
+    sheet_pdf_url: SAMPLE_PDF,
+    sheet_file_name: "DB2_Section_01_Explain_Sheet.pdf",
+    sheet_file_size: "1.2 MB",
+    solution_pdf_url: SAMPLE_PDF,
+    solution_file_name: "DB2_Section_01_Query_Solutions.pdf",
+    solution_file_size: "1.5 MB",
     created_at: new Date(Date.now() - 26 * 24 * 3600 * 1000).toISOString()
   },
   {
@@ -314,6 +332,12 @@ export const INITIAL_MATERIALS = [
     external_url: "",
     file_name: "DB2_Section_02_Triggers_Views.pdf",
     file_size: "1.5 MB",
+    sheet_pdf_url: SAMPLE_PDF,
+    sheet_file_name: "DB2_Section_02_Triggers_Sheet.pdf",
+    sheet_file_size: "1.5 MB",
+    solution_pdf_url: "",
+    solution_file_name: "",
+    solution_file_size: "",
     created_at: new Date(Date.now() - 19 * 24 * 3600 * 1000).toISOString()
   },
   {
@@ -392,6 +416,12 @@ export const INITIAL_MATERIALS = [
     external_url: "",
     file_name: "DSS_Section_01_AHP_Models.pdf",
     file_size: "1.4 MB",
+    sheet_pdf_url: SAMPLE_PDF,
+    sheet_file_name: "DSS_Section_01_AHP_Sheet.pdf",
+    sheet_file_size: "1.4 MB",
+    solution_pdf_url: SAMPLE_PDF,
+    solution_file_name: "DSS_Section_01_AHP_Excel_Solution.pdf",
+    solution_file_size: "1.9 MB",
     created_at: new Date(Date.now() - 20 * 24 * 3600 * 1000).toISOString()
   },
   {
@@ -470,6 +500,12 @@ export const INITIAL_MATERIALS = [
     external_url: "https://stripe.com/docs/payments",
     file_name: "ECommerce_Section_01_Stripe_Integration.pdf",
     file_size: "1.7 MB",
+    sheet_pdf_url: SAMPLE_PDF,
+    sheet_file_name: "ECommerce_Section_01_Stripe_Sheet.pdf",
+    sheet_file_size: "1.7 MB",
+    solution_pdf_url: SAMPLE_PDF,
+    solution_file_name: "ECommerce_Section_01_Stripe_Solution.pdf",
+    solution_file_size: "1.8 MB",
     created_at: new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString()
   },
   {
@@ -526,6 +562,12 @@ export const INITIAL_MATERIALS = [
     external_url: "",
     file_name: "DataProtection_Section_01_OpenSSL_Guide.pdf",
     file_size: "1.6 MB",
+    sheet_pdf_url: SAMPLE_PDF,
+    sheet_file_name: "DataProtection_Section_01_OpenSSL_Sheet.pdf",
+    sheet_file_size: "1.6 MB",
+    solution_pdf_url: "",
+    solution_file_name: "",
+    solution_file_size: "",
     created_at: new Date(Date.now() - 9 * 24 * 3600 * 1000).toISOString()
   },
   {

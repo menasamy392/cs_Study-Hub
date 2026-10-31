@@ -30,6 +30,12 @@ CREATE TABLE IF NOT EXISTS public.materials (
     external_url TEXT DEFAULT '',
     file_name TEXT DEFAULT '',
     file_size TEXT DEFAULT '',
+    sheet_pdf_url TEXT DEFAULT '',
+    sheet_file_name TEXT DEFAULT '',
+    sheet_file_size TEXT DEFAULT '',
+    solution_pdf_url TEXT DEFAULT '',
+    solution_file_name TEXT DEFAULT '',
+    solution_file_size TEXT DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -54,6 +60,12 @@ CREATE TABLE IF NOT EXISTS public.warnings (
     file_url TEXT NOT NULL,
     file_name TEXT DEFAULT '',
     file_size TEXT DEFAULT '',
+    sheet_pdf_url TEXT DEFAULT '',
+    sheet_file_name TEXT DEFAULT '',
+    sheet_file_size TEXT DEFAULT '',
+    solution_pdf_url TEXT DEFAULT '',
+    solution_file_name TEXT DEFAULT '',
+    solution_file_size TEXT DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -191,9 +203,18 @@ BEGIN
         RAISE EXCEPTION 'Unauthorized: Invalid admin secret token';
     END IF;
 
+    -- A. Subjects: Cascade delete children and gather files
     IF p_table = 'subjects' THEN
-        SELECT COALESCE(ARRAY_AGG(file_url), ARRAY[]::TEXT[]) INTO v_deleted_files 
-        FROM public.materials WHERE subject_id = p_id AND file_url <> '';
+        SELECT COALESCE(ARRAY_AGG(f), ARRAY[]::TEXT[]) INTO v_deleted_files 
+        FROM (
+            SELECT file_url AS f FROM public.materials WHERE subject_id = p_id AND file_url IS NOT NULL AND file_url <> ''
+            UNION ALL
+            SELECT sheet_pdf_url AS f FROM public.materials WHERE subject_id = p_id AND sheet_pdf_url IS NOT NULL AND sheet_pdf_url <> ''
+            UNION ALL
+            SELECT solution_pdf_url AS f FROM public.materials WHERE subject_id = p_id AND solution_pdf_url IS NOT NULL AND solution_pdf_url <> ''
+            UNION ALL
+            SELECT file_url AS f FROM public.warnings WHERE subject_id = p_id AND file_url IS NOT NULL AND file_url <> ''
+        ) all_files;
 
         DELETE FROM public.materials WHERE subject_id = p_id;
         DELETE FROM public.announcements WHERE subject_id = p_id;
@@ -201,26 +222,32 @@ BEGIN
         DELETE FROM public.subjects WHERE id = p_id;
         GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
 
+    -- B. Materials (Lectures, Sections, Quizzes, Study Notes)
     ELSIF p_table = 'materials' THEN
-        SELECT COALESCE(ARRAY_AGG(file_url), ARRAY[]::TEXT[]) INTO v_deleted_files 
-        FROM public.materials WHERE id = p_id AND file_url <> '';
+        SELECT COALESCE(ARRAY_AGG(f), ARRAY[]::TEXT[]) INTO v_deleted_files 
+        FROM (
+            SELECT file_url AS f FROM public.materials WHERE id = p_id AND file_url IS NOT NULL AND file_url <> ''
+            UNION ALL
+            SELECT sheet_pdf_url AS f FROM public.materials WHERE id = p_id AND sheet_pdf_url IS NOT NULL AND sheet_pdf_url <> ''
+            UNION ALL
+            SELECT solution_pdf_url AS f FROM public.materials WHERE id = p_id AND solution_pdf_url IS NOT NULL AND solution_pdf_url <> ''
+        ) mat_files;
 
         DELETE FROM public.materials WHERE id = p_id;
         GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
 
+    -- C. Announcements
     ELSIF p_table = 'announcements' THEN
         DELETE FROM public.announcements WHERE id = p_id;
         GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
 
+    -- D. Warnings (Student Academic Warning PDFs)
     ELSIF p_table = 'warnings' THEN
         SELECT COALESCE(ARRAY_AGG(file_url), ARRAY[]::TEXT[]) INTO v_deleted_files 
-        FROM public.warnings WHERE id = p_id AND file_url <> '';
+        FROM public.warnings WHERE id = p_id AND file_url IS NOT NULL AND file_url <> '';
 
         DELETE FROM public.warnings WHERE id = p_id;
         GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
-
-    ELSE
-        RAISE EXCEPTION 'Invalid table name: %', p_table;
     END IF;
 
     RETURN jsonb_build_object(
@@ -272,7 +299,12 @@ BEGIN
             RETURNING to_jsonb(public.subjects.*) INTO v_result;
 
         ELSIF p_table = 'materials' THEN
-            INSERT INTO public.materials (id, subject_id, title, type, number, description, category, file_url, external_url, file_name, file_size)
+            INSERT INTO public.materials (
+                id, subject_id, title, type, number, description, category,
+                file_url, external_url, file_name, file_size,
+                sheet_pdf_url, sheet_file_name, sheet_file_size,
+                solution_pdf_url, solution_file_name, solution_file_size
+            )
             VALUES (
                 COALESCE(p_data->>'id', gen_random_uuid()::text),
                 p_data->>'subject_id',
@@ -284,7 +316,13 @@ BEGIN
                 COALESCE(p_data->>'file_url', ''),
                 COALESCE(p_data->>'external_url', ''),
                 COALESCE(p_data->>'file_name', ''),
-                COALESCE(p_data->>'file_size', '')
+                COALESCE(p_data->>'file_size', ''),
+                COALESCE(p_data->>'sheet_pdf_url', ''),
+                COALESCE(p_data->>'sheet_file_name', ''),
+                COALESCE(p_data->>'sheet_file_size', ''),
+                COALESCE(p_data->>'solution_pdf_url', ''),
+                COALESCE(p_data->>'solution_file_name', ''),
+                COALESCE(p_data->>'solution_file_size', '')
             )
             RETURNING to_jsonb(public.materials.*) INTO v_result;
 
@@ -337,10 +375,16 @@ BEGIN
                 number = COALESCE((p_data->>'number')::int, number),
                 description = COALESCE(p_data->>'description', description),
                 category = COALESCE(p_data->>'category', category),
-                file_url = COALESCE(p_data->>'file_url', file_url),
-                external_url = COALESCE(p_data->>'external_url', external_url),
-                file_name = COALESCE(p_data->>'file_name', file_name),
-                file_size = COALESCE(p_data->>'file_size', file_size)
+                file_url = CASE WHEN p_data ? 'file_url' THEN p_data->>'file_url' ELSE file_url END,
+                external_url = CASE WHEN p_data ? 'external_url' THEN p_data->>'external_url' ELSE external_url END,
+                file_name = CASE WHEN p_data ? 'file_name' THEN p_data->>'file_name' ELSE file_name END,
+                file_size = CASE WHEN p_data ? 'file_size' THEN p_data->>'file_size' ELSE file_size END,
+                sheet_pdf_url = CASE WHEN p_data ? 'sheet_pdf_url' THEN p_data->>'sheet_pdf_url' ELSE sheet_pdf_url END,
+                sheet_file_name = CASE WHEN p_data ? 'sheet_file_name' THEN p_data->>'sheet_file_name' ELSE sheet_file_name END,
+                sheet_file_size = CASE WHEN p_data ? 'sheet_file_size' THEN p_data->>'sheet_file_size' ELSE sheet_file_size END,
+                solution_pdf_url = CASE WHEN p_data ? 'solution_pdf_url' THEN p_data->>'solution_pdf_url' ELSE solution_pdf_url END,
+                solution_file_name = CASE WHEN p_data ? 'solution_file_name' THEN p_data->>'solution_file_name' ELSE solution_file_name END,
+                solution_file_size = CASE WHEN p_data ? 'solution_file_size' THEN p_data->>'solution_file_size' ELSE solution_file_size END
             WHERE id = p_id
             RETURNING to_jsonb(public.materials.*) INTO v_result;
 

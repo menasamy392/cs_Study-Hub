@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -39,7 +39,7 @@ import { useToast } from '../components/Toast';
 import ConfirmationModal from '../components/ConfirmationModal';
 import FilePreviewModal from '../components/FilePreviewModal';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
-import { SCHEMA_SQL, MIGRATION_DELETE_SQL, MIGRATION_ANALYTICS_SQL } from '../lib/schemaSql';
+import { SCHEMA_SQL, MIGRATION_DELETE_SQL, MIGRATION_ANALYTICS_SQL, MIGRATION_SECTION_SHEETS_SQL } from '../lib/schemaSql';
 
 const AVAILABLE_ICONS = [
   'BookOpen',
@@ -217,7 +217,19 @@ export default function AdminDashboard() {
     file_url: '',
     file_name: '',
     file_size: '',
+    sheet_pdf_url: '',
+    sheet_file_name: '',
+    sheet_file_size: '',
+    solution_pdf_url: '',
+    solution_file_name: '',
+    solution_file_size: '',
   });
+  const [selectedSheetFile, setSelectedSheetFile] = useState(null);
+  const [selectedSolutionFile, setSelectedSolutionFile] = useState(null);
+  const [isUploadingSheet, setIsUploadingSheet] = useState(false);
+  const [isUploadingSolution, setIsUploadingSolution] = useState(false);
+  const sheetFileInputRef = useRef(null);
+  const solutionFileInputRef = useRef(null);
 
   // Announcement Modal state
   const [announcementModalOpen, setAnnouncementModalOpen] = useState(false);
@@ -345,10 +357,27 @@ export default function AdminDashboard() {
     }
   };
 
+  // Helper for admin PDF preview
+  const handleViewAdminPdf = (url, title, fileName) => {
+    if (!url) {
+      addToast('No PDF attached to view', 'error');
+      return;
+    }
+    setPreviewModal({
+      isOpen: true,
+      fileUrl: url,
+      title: title || 'PDF Document Preview',
+      fileName: fileName || 'document.pdf',
+    });
+  };
+
   // Handle Material Modal Open
   const handleOpenMaterialModal = (material = null, defaultType = 'lecture') => {
     setSelectedFile(null);
+    setSelectedSheetFile(null);
+    setSelectedSolutionFile(null);
     if (material) {
+      const isSec = material.type === 'section';
       setEditingMaterial(material);
       setMaterialForm({
         subject_id: material.subject_id,
@@ -361,6 +390,12 @@ export default function AdminDashboard() {
         file_url: material.file_url || '',
         file_name: material.file_name || '',
         file_size: material.file_size || '',
+        sheet_pdf_url: material.sheet_pdf_url || (isSec ? material.file_url : ''),
+        sheet_file_name: material.sheet_file_name || (isSec ? material.file_name : ''),
+        sheet_file_size: material.sheet_file_size || (isSec ? material.file_size : ''),
+        solution_pdf_url: material.solution_pdf_url || '',
+        solution_file_name: material.solution_file_name || '',
+        solution_file_size: material.solution_file_size || '',
       });
     } else {
       setEditingMaterial(null);
@@ -375,6 +410,12 @@ export default function AdminDashboard() {
         file_url: '',
         file_name: '',
         file_size: '',
+        sheet_pdf_url: '',
+        sheet_file_name: '',
+        sheet_file_size: '',
+        solution_pdf_url: '',
+        solution_file_name: '',
+        solution_file_size: '',
       });
     }
     setMaterialModalOpen(true);
@@ -395,22 +436,64 @@ export default function AdminDashboard() {
       setIsSaving(true);
       let updatedData = { ...materialForm };
 
-      if (selectedFile) {
-        setIsUploading(true);
-        const folder = materialForm.type === 'lecture' ? 'lectures' : 'sections';
-        const uploadRes = await uploadFile(selectedFile, folder);
-        updatedData.file_url = uploadRes.file_url;
-        updatedData.file_name = uploadRes.file_name;
-        updatedData.file_size = uploadRes.file_size;
-        setIsUploading(false);
+      // Handle dual uploads for sections
+      if (materialForm.type === 'section') {
+        // Upload Sheet PDF independently
+        if (selectedSheetFile) {
+          setIsUploadingSheet(true);
+          const sheetRes = await uploadFile(selectedSheetFile, 'sections/sheets');
+          updatedData.sheet_pdf_url = sheetRes.file_url;
+          updatedData.sheet_file_name = sheetRes.file_name;
+          updatedData.sheet_file_size = sheetRes.file_size;
+          // Maintain backward compatibility for any component reading file_url
+          updatedData.file_url = sheetRes.file_url;
+          updatedData.file_name = sheetRes.file_name;
+          updatedData.file_size = sheetRes.file_size;
+          setIsUploadingSheet(false);
+        } else if (updatedData.sheet_pdf_url && !updatedData.file_url) {
+          updatedData.file_url = updatedData.sheet_pdf_url;
+          updatedData.file_name = updatedData.sheet_file_name;
+          updatedData.file_size = updatedData.sheet_file_size;
+        }
+
+        // Upload Solution PDF independently
+        if (selectedSolutionFile) {
+          setIsUploadingSolution(true);
+          const solRes = await uploadFile(selectedSolutionFile, 'sections/solutions');
+          updatedData.solution_pdf_url = solRes.file_url;
+          updatedData.solution_file_name = solRes.file_name;
+          updatedData.solution_file_size = solRes.file_size;
+          setIsUploadingSolution(false);
+        }
+      } else {
+        // Handle single upload for lectures and other materials
+        if (selectedFile) {
+          setIsUploading(true);
+          const folder = materialForm.type === 'lecture' ? 'lectures' : 'materials';
+          const uploadRes = await uploadFile(selectedFile, folder);
+          updatedData.file_url = uploadRes.file_url;
+          updatedData.file_name = uploadRes.file_name;
+          updatedData.file_size = uploadRes.file_size;
+          setIsUploading(false);
+        }
       }
 
       if (editingMaterial) {
         await updateMaterial(editingMaterial.id, updatedData);
-        addToast('Material updated successfully!', 'success');
+        addToast(
+          materialForm.type === 'section'
+            ? 'Section sheets & solutions updated successfully!'
+            : 'Material updated successfully!',
+          'success'
+        );
       } else {
         await addMaterial(updatedData);
-        addToast('Material added successfully!', 'success');
+        addToast(
+          materialForm.type === 'section'
+            ? 'Section with sheet & solution added successfully!'
+            : 'Material added successfully!',
+          'success'
+        );
       }
       setMaterialModalOpen(false);
     } catch (err) {
@@ -418,6 +501,8 @@ export default function AdminDashboard() {
     } finally {
       setIsSaving(false);
       setIsUploading(false);
+      setIsUploadingSheet(false);
+      setIsUploadingSolution(false);
     }
   };
 
@@ -982,7 +1067,70 @@ export default function AdminDashboard() {
                             {sub?.name || 'N/A'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-400">
-                            {mat.file_url ? 'PDF Attached' : mat.external_url ? 'External Link' : 'None'}
+                            {mat.type === 'section' ? (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {(mat.sheet_pdf_url || mat.file_url) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleViewAdminPdf(
+                                        mat.sheet_pdf_url || mat.file_url,
+                                        `${mat.title} - Sheet`,
+                                        mat.sheet_file_name || mat.file_name
+                                      )
+                                    }
+                                    className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="View Sheet PDF"
+                                  >
+                                    📄 Sheet
+                                  </button>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md bg-slate-900 text-slate-500 border border-slate-800 text-[11px]">
+                                    No Sheet
+                                  </span>
+                                )}
+
+                                {mat.solution_pdf_url ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleViewAdminPdf(
+                                        mat.solution_pdf_url,
+                                        `${mat.title} - Solution`,
+                                        mat.solution_file_name
+                                      )
+                                    }
+                                    className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="View Solution PDF"
+                                  >
+                                    ✅ Solution
+                                  </button>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md bg-slate-900 text-slate-500 border border-slate-800 text-[11px]">
+                                    No Sol
+                                  </span>
+                                )}
+                              </div>
+                            ) : mat.file_url ? (
+                              <button
+                                type="button"
+                                onClick={() => handleViewAdminPdf(mat.file_url, mat.title, mat.file_name)}
+                                className="text-blue-400 hover:text-blue-300 underline font-medium cursor-pointer"
+                              >
+                                PDF Attached
+                              </button>
+                            ) : mat.external_url ? (
+                              <a
+                                href={mat.external_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-amber-400 hover:text-amber-300 underline"
+                              >
+                                External Link
+                              </a>
+                            ) : (
+                              'None'
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -1564,6 +1712,54 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            {/* Section Sheets & Solutions SQL Migration Card */}
+            <div className="p-5 rounded-2xl bg-[#0F172A] border border-slate-800 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      Section Sheet & Solution PDFs Migration
+                      <span
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          dbStatus.sectionSheetsReady
+                            ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
+                            : 'bg-blue-950/60 text-blue-300 border border-blue-800/60'
+                        }`}
+                      >
+                        {dbStatus.sectionSheetsReady ? 'Active in Supabase' : 'SQL Migration Script Ready'}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Adds independent <code className="text-blue-300">sheet_pdf_url</code> and <code className="text-emerald-300">solution_pdf_url</code> columns to practical sections with cascade file deletion.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(MIGRATION_SECTION_SHEETS_SQL);
+                      addToast('Section Sheets migration script copied to clipboard!', 'success');
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md cursor-pointer"
+                  >
+                    <Copy className="w-4 h-4" /> Copy Section SQL
+                  </button>
+                  <a
+                    href="https://supabase.com/dashboard/project/qksklthfpbcwseiqpajq/sql/new"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-700"
+                  >
+                    SQL Editor <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+
             <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
               <div>
                 <p className="text-sm font-bold text-white">Reset Local Mock Data</p>
@@ -1714,20 +1910,265 @@ export default function AdminDashboard() {
                 />
               </div>
 
+              {/* Description */}
               <div>
-                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">PDF File</label>
-                <input
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) {
-                      setSelectedFile(e.target.files[0]);
-                      setMaterialForm({ ...materialForm, file_name: e.target.files[0].name });
-                    }
-                  }}
-                  className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white"
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Description / Topic</label>
+                <textarea
+                  rows={2}
+                  value={materialForm.description}
+                  onChange={(e) => setMaterialForm({ ...materialForm, description: e.target.value })}
+                  placeholder="Summary of topics, exercises, or prerequisites..."
+                  className="w-full px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-base sm:text-sm resize-none"
                 />
               </div>
+
+              {/* DUAL UPLOADS FOR SECTIONS (Sheet PDF + Solution PDF) */}
+              {materialForm.type === 'section' ? (
+                <div className="space-y-4 pt-1">
+                  <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-xs text-blue-300">
+                    <span className="font-bold text-blue-200 block mb-0.5">Section Dual PDF Support</span>
+                    Upload exercises (Sheet PDF) and solutions (Solution PDF) independently. Both uploads are optional.
+                  </div>
+
+                  {/* 1. SHEET PDF CARD */}
+                  <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold uppercase tracking-wide text-slate-200 flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-blue-400" />
+                        1. Sheet PDF (Exercises & Problems)
+                      </label>
+                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                        Optional
+                      </span>
+                    </div>
+
+                    <input
+                      ref={sheetFileInputRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) {
+                          const file = e.target.files[0];
+                          setSelectedSheetFile(file);
+                          setMaterialForm((prev) => ({
+                            ...prev,
+                            sheet_file_name: file.name,
+                            sheet_file_size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+                          }));
+                        }
+                      }}
+                    />
+
+                    {(selectedSheetFile || materialForm.sheet_pdf_url) ? (
+                      <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-white truncate">
+                              {selectedSheetFile ? selectedSheetFile.name : materialForm.sheet_file_name || 'Section_Sheet.pdf'}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {selectedSheetFile
+                                ? `${(selectedSheetFile.size / (1024 * 1024)).toFixed(1)} MB (Ready to upload)`
+                                : materialForm.sheet_file_size || 'Cloud PDF attached'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {materialForm.sheet_pdf_url && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleViewAdminPdf(
+                                  materialForm.sheet_pdf_url,
+                                  `${materialForm.title} - Sheet`,
+                                  materialForm.sheet_file_name
+                                )
+                              }
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                              title="View uploaded Sheet"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> View
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => sheetFileInputRef.current?.click()}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            title="Replace Sheet PDF"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" /> Replace
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSheetFile(null);
+                              setMaterialForm((prev) => ({
+                                ...prev,
+                                sheet_pdf_url: '',
+                                sheet_file_name: '',
+                                sheet_file_size: '',
+                              }));
+                              if (sheetFileInputRef.current) sheetFileInputRef.current.value = '';
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            title="Delete Sheet PDF"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => sheetFileInputRef.current?.click()}
+                        className="w-full p-4 border-2 border-dashed border-slate-700 hover:border-blue-500/60 rounded-xl bg-slate-950/40 hover:bg-blue-950/20 transition-all flex flex-col items-center justify-center gap-1.5 group text-center cursor-pointer"
+                      >
+                        <Upload className="w-5 h-5 text-slate-400 group-hover:text-blue-400 transition-colors" />
+                        <span className="text-xs font-bold text-slate-300 group-hover:text-white">
+                          Upload Sheet PDF
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          Exercises, lab worksheets, or assignment problems (.pdf)
+                        </span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 2. SOLUTION PDF CARD */}
+                  <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold uppercase tracking-wide text-slate-200 flex items-center gap-1.5">
+                        <CheckCircle className="w-4 h-4 text-emerald-400" />
+                        2. Solution PDF (Answers & Explanations)
+                      </label>
+                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                        Optional
+                      </span>
+                    </div>
+
+                    <input
+                      ref={solutionFileInputRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) {
+                          const file = e.target.files[0];
+                          setSelectedSolutionFile(file);
+                          setMaterialForm((prev) => ({
+                            ...prev,
+                            solution_file_name: file.name,
+                            solution_file_size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+                          }));
+                        }
+                      }}
+                    />
+
+                    {(selectedSolutionFile || materialForm.solution_pdf_url) ? (
+                      <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-white truncate">
+                              {selectedSolutionFile ? selectedSolutionFile.name : materialForm.solution_file_name || 'Section_Solution.pdf'}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {selectedSolutionFile
+                                ? `${(selectedSolutionFile.size / (1024 * 1024)).toFixed(1)} MB (Ready to upload)`
+                                : materialForm.solution_file_size || 'Cloud PDF attached'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {materialForm.solution_pdf_url && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleViewAdminPdf(
+                                  materialForm.solution_pdf_url,
+                                  `${materialForm.title} - Solution`,
+                                  materialForm.solution_file_name
+                                )
+                              }
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                              title="View uploaded Solution"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> View
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => solutionFileInputRef.current?.click()}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            title="Replace Solution PDF"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" /> Replace
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSolutionFile(null);
+                              setMaterialForm((prev) => ({
+                                ...prev,
+                                solution_pdf_url: '',
+                                solution_file_name: '',
+                                solution_file_size: '',
+                              }));
+                              if (solutionFileInputRef.current) solutionFileInputRef.current.value = '';
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            title="Delete Solution PDF"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => solutionFileInputRef.current?.click()}
+                        className="w-full p-4 border-2 border-dashed border-slate-700 hover:border-emerald-500/60 rounded-xl bg-slate-950/40 hover:bg-emerald-950/20 transition-all flex flex-col items-center justify-center gap-1.5 group text-center cursor-pointer"
+                      >
+                        <Upload className="w-5 h-5 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+                        <span className="text-xs font-bold text-slate-300 group-hover:text-white">
+                          Upload Solution PDF
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          Model answer key, step-by-step solutions (.pdf)
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">PDF File</label>
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        setSelectedFile(e.target.files[0]);
+                        setMaterialForm({ ...materialForm, file_name: e.target.files[0].name });
+                      }
+                    }}
+                    className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white"
+                  />
+                  {materialForm.file_name && !selectedFile && (
+                    <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5 text-blue-400" /> Current: {materialForm.file_name}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">External Link / URL</label>
@@ -1750,10 +2191,20 @@ export default function AdminDashboard() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving}
-                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg transition-all active:scale-95 min-h-[44px]"
+                  disabled={isSaving || isUploading || isUploadingSheet || isUploadingSolution}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg transition-all active:scale-95 min-h-[44px] cursor-pointer"
                 >
-                  Save Material
+                  {isUploadingSheet
+                    ? 'Uploading Sheet...'
+                    : isUploadingSolution
+                    ? 'Uploading Solution...'
+                    : isUploading
+                    ? 'Uploading PDF...'
+                    : isSaving
+                    ? 'Saving...'
+                    : editingMaterial
+                    ? 'Update Material'
+                    : 'Save Material'}
                 </button>
               </div>
             </form>

@@ -110,12 +110,25 @@ export default async function handler(req, res) {
       analyticsReady = false;
     }
 
+    // 6. Check if Section Sheet & Solution columns are ready
+    let sectionSheetsReady = false;
+    try {
+      const { error: sErr } = await supabaseAdmin
+        .from('materials')
+        .select('sheet_pdf_url')
+        .limit(1);
+      sectionSheetsReady = !sErr;
+    } catch {
+      sectionSheetsReady = false;
+    }
+
     return res.status(200).json({
       connected: true,
       configured: true,
       tablesReady: true,
       deleteProcedureReady,
       analyticsReady,
+      sectionSheetsReady,
       hasServiceRoleKey,
       projectRef: 'qksklthfpbcwseiqpajq',
       url: supabaseUrl,
